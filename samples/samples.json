@@ -1,0 +1,151 @@
+{
+  "samples": [
+    {
+      "name": "User Profile Mapping (Standard Prompt Sample)",
+      "description": "Translates employee profile with date reformats, boolean string-to-boolean, number-to-string, and nested contact email",
+      "sourcePayload": {
+        "name": "Baljinder Singh",
+        "dob": "10/05/1992",
+        "active": "Yes",
+        "project_id": 1001,
+        "contact": {
+          "email": "user@example.com"
+        }
+      },
+      "targetSchema": {
+        "userName": "string",
+        "dateOfBirth": "yyyy-MM-dd",
+        "accountEnabled": "boolean",
+        "projectId": "string",
+        "emailAddress": "string"
+      },
+      "expectedTarget": {
+        "userName": "Baljinder Singh",
+        "dateOfBirth": "1992-05-10",
+        "accountEnabled": true,
+        "projectId": "1001",
+        "emailAddress": "user@example.com"
+      },
+      "plainEnglishRules": [
+        "Map name to userName.",
+        "Convert dob from dd/MM/yyyy to yyyy-MM-dd as dateOfBirth.",
+        "Set accountEnabled to true when active is Yes.",
+        "Convert project_id to string projectId.",
+        "Extract contact.email into emailAddress."
+      ]
+    },
+    {
+      "name": "E-Commerce Customer & Address Mapping",
+      "description": "Concatenation of name, enum mapping for country code, and address flattening",
+      "sourcePayload": {
+        "firstName": "Jane",
+        "lastName": "Doe",
+        "country": "India",
+        "address": {
+          "postalCode": "110001",
+          "city": "New Delhi"
+        }
+      },
+      "targetSchema": {
+        "fullName": "string",
+        "countryCode": "string",
+        "zipCode": "string",
+        "city": "string"
+      },
+      "expectedTarget": {
+        "fullName": "Jane Doe",
+        "countryCode": "IN",
+        "zipCode": "110001",
+        "city": "New Delhi"
+      }
+    },
+    {
+      "name": "Enterprise Core POS (System A) -> Cloud ERP (System B) [WRITE FLOW]",
+      "description": "System A writes customer/order data in legacy format. SchemaBridge AI deterministically translates to System B cloud schema.",
+      "sourcePayload": {
+        "order_num": "ORD-2026-991",
+        "cust_id": "CUST-4081",
+        "name": "Dr. Sarah Connor",
+        "dob": "15/08/1988",
+        "active": "Yes",
+        "tier": "GOLD_TIER",
+        "contact": {
+          "email": "sarah.c@cyberdyne.org",
+          "phone": "+1-555-0199"
+        },
+        "total_amount": 499.99
+      },
+      "targetSchema": {
+        "orderId": "string",
+        "customerId": "string",
+        "userName": "string",
+        "dateOfBirth": "yyyy-MM-dd",
+        "accountEnabled": "boolean",
+        "membershipLevel": "string",
+        "emailAddress": "string",
+        "telephone": "string",
+        "totalAmount": "number"
+      },
+      "expectedTarget": {
+        "orderId": "ORD-2026-991",
+        "customerId": "CUST-4081",
+        "userName": "Dr. Sarah Connor",
+        "dateOfBirth": "1988-08-15",
+        "accountEnabled": true,
+        "membershipLevel": "GLD",
+        "emailAddress": "sarah.c@cyberdyne.org",
+        "telephone": "+1-555-0199",
+        "totalAmount": 499.99
+      },
+      "plainEnglishRules": [
+        "Rename order_num to orderId.",
+        "Rename cust_id to customerId.",
+        "Map name to userName.",
+        "Convert dob from dd/MM/yyyy to yyyy-MM-dd as dateOfBirth.",
+        "Convert active string Yes to boolean accountEnabled.",
+        "Map tier GOLD_TIER to membershipLevel GLD.",
+        "Extract contact.email into emailAddress.",
+        "Extract contact.phone into telephone.",
+        "Rename total_amount to totalAmount."
+      ]
+    },
+    {
+      "name": "Cloud ERP (System B) -> Enterprise Core POS (System A) [READ FLOW]",
+      "description": "System A queries data from System B. SchemaBridge AI reverse-translates System B modern record to System A legacy format.",
+      "sourcePayload": {
+        "orderId": "ORD-2026-991",
+        "customerId": "CUST-4081",
+        "userName": "Dr. Sarah Connor",
+        "dateOfBirth": "1988-08-15",
+        "accountEnabled": true,
+        "membershipLevel": "GLD",
+        "emailAddress": "sarah.c@cyberdyne.org",
+        "telephone": "+1-555-0199",
+        "totalAmount": 499.99
+      },
+      "targetSchema": {
+        "order_num": "string",
+        "cust_id": "string",
+        "name": "string",
+        "dob": "dd/MM/yyyy",
+        "active": "string",
+        "tier": "string",
+        "contact": "object",
+        "total_amount": "number"
+      },
+      "expectedTarget": {
+        "order_num": "ORD-2026-991",
+        "cust_id": "CUST-4081",
+        "name": "Dr. Sarah Connor",
+        "dob": "15/08/1988",
+        "active": "Yes",
+        "tier": "GOLD_TIER",
+        "contact": {
+          "email": "sarah.c@cyberdyne.org",
+          "phone": "+1-555-0199"
+        },
+        "total_amount": 499.99
+      }
+    }
+  ]
+}

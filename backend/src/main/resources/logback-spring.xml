@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <property name="SERVICE_CODE" value="SB-AI-CORE"/>
+    <property name="APP_VERSION" value="1.0.0"/>
+
+    <appender name="CONSOLE_JSON" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+            <providers>
+                <timestamp>
+                    <fieldName>time</fieldName>
+                    <pattern>yyyy-MM-dd'T'HH:mm:ss.SSSZZ</pattern>
+                </timestamp>
+                <logLevel>
+                    <fieldName>severity</fieldName>
+                </logLevel>
+                <loggerName>
+                    <fieldName>logger_name</fieldName>
+                </loggerName>
+                <message>
+                    <fieldName>message</fieldName>
+                </message>
+                <pattern>
+                    <pattern>
+                        {
+                            "serviceCode": "${SERVICE_CODE}",
+                            "applicationVersion": "${APP_VERSION}",
+                            "request.uuid": "%mdc{correlationId:-N/A}",
+                            "projectId": "%mdc{projectId:-N/A}",
+                            "mappingVersion": "%mdc{mappingVersion:-N/A}",
+                            "executionStatus": "%mdc{executionStatus:-N/A}",
+                            "validationStatus": "%mdc{validationStatus:-N/A}",
+                            "aviatorLatencyMs": "%mdc{aviatorLatencyMs:-N/A}"
+                        }
+                    </pattern>
+                </pattern>
+                <stackTrace>
+                    <fieldName>stack_trace</fieldName>
+                </stackTrace>
+            </providers>
+        </encoder>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE_JSON"/>
+    </root>
+
+    <logger name="com.schemabridge" level="DEBUG"/>
+</configuration>

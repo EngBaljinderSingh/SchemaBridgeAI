@@ -1,0 +1,900 @@
+<header class="app-header">
+  <div class="brand-section">
+    <div class="brand-logo" data-aid="brand-logo">SB</div>
+    <div>
+      <div class="brand-title" data-aid="brand-title">SchemaBridge AI</div>
+      <div class="brand-tagline">Intelligent Schema &amp; Payload Translation Platform</div>
+    </div>
+  </div>
+
+  <div class="header-center">
+    <nav class="nav-tabs" data-aid="nav-tabs">
+      <button class="nav-tab-btn" [class.active]="activeTab === 'projects'" (click)="activeTab = 'projects'" data-aid="nav-tab-projects">
+        Apps
+      </button>
+      <button class="nav-tab-btn" [class.active]="activeTab === 'apis'" (click)="activeTab = 'apis'" data-aid="nav-tab-apis">
+        API Registry ({{ registeredApis.length }})
+      </button>
+      <button class="nav-tab-btn" [class.active]="activeTab === 'setup'" (click)="activeTab = 'setup'" data-aid="nav-tab-setup">
+        Setup &amp; Schemas
+      </button>
+      <button class="nav-tab-btn" [class.active]="activeTab === 'mapping'" (click)="activeTab = 'mapping'" data-aid="nav-tab-mapping">
+        Mapping Workspace
+      </button>
+      <button class="nav-tab-btn" [class.active]="activeTab === 'preview'" (click)="activeTab = 'preview'" data-aid="nav-tab-preview">
+        Transformation Lab
+      </button>
+      <button class="nav-tab-btn" [class.active]="activeTab === 'versions'" (click)="activeTab = 'versions'" data-aid="nav-tab-versions">
+        Versions
+      </button>
+      <button class="nav-tab-btn" [class.active]="activeTab === 'audit'" (click)="activeTab = 'audit'" data-aid="nav-tab-audit">
+        Audit Trail
+      </button>
+    </nav>
+  </div>
+
+  <div class="header-right">
+    <button class="btn btn-secondary btn-sm" (click)="showArchitectureGuide = true" data-aid="btn-show-guide" style="border-color: rgba(59, 130, 246, 0.4); background: rgba(59, 130, 246, 0.1);">
+      📖 Architecture &amp; How It Works
+    </button>
+
+    <div class="aviator-status-pill" (click)="refreshAviatorHealth()" data-aid="aviator-status-pill" title="Click to ping Aviator ADT">
+      <div class="status-dot" [class.degraded]="aviatorHealth?.status !== 'UP'"></div>
+      <span>Aviator AI: {{ aviatorHealth?.status === 'UP' ? 'Connected' : 'Fallback Active' }} ({{ aviatorHealth?.latencyMs }}ms)</span>
+    </div>
+
+    <button class="btn btn-primary btn-sm" (click)="showNewProjectModal = true" data-aid="btn-new-project-header">
+      + New Project
+    </button>
+  </div>
+</header>
+
+<main class="main-container">
+
+  <!-- TAB 1: PROJECTS LIST -->
+  <div *ngIf="activeTab === 'projects'" class="animate-slide-up" data-aid="view-projects">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+      <div>
+        <h2>Integration Projects &amp; Apps</h2>
+        <p style="color: var(--text-secondary); font-size: 0.875rem;">Manage schema translation pipelines between disparate systems</p>
+      </div>
+      <button class="btn btn-primary" (click)="showNewProjectModal = true" data-aid="btn-create-project-main">
+        + Create Integration Project
+      </button>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 20px;">
+      <div *ngFor="let proj of projects" class="glass-card" style="padding: 24px; cursor: pointer;"
+           [style.borderColor]="selectedProject?.id === proj.id ? 'var(--border-focus)' : 'var(--border-subtle)'"
+           (click)="selectProject(proj)" [attr.data-aid]="'project-card-' + proj.id">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+          <h3 style="font-size: 1.125rem;">{{ proj.name }}</h3>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <span class="badge" [class.badge-high]="proj.status === 'ACTIVE'" [class.badge-medium]="proj.status === 'DRAFT'">
+              {{ proj.status }}
+            </span>
+          </div>
+        </div>
+        <p style="color: var(--text-secondary); font-size: 0.8125rem; margin-bottom: 20px; min-height: 38px;">
+          {{ proj.description || 'No description provided.' }}
+        </p>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: var(--text-muted); border-top: 1px solid var(--border-subtle); padding-top: 14px;">
+          <div>
+            <span>Versions: <strong>{{ proj.mappingVersionCount }}</strong></span>
+            <span style="margin-left: 10px;">Latest: <strong>{{ proj.latestPublishedVersion ? 'v' + proj.latestPublishedVersion : 'None' }}</strong></span>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn btn-secondary btn-sm" (click)="selectProject(proj); activeTab = 'apis'" data-aid="btn-open-project">
+              Open &rarr;
+            </button>
+            <button class="btn btn-sm" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);"
+                    (click)="deleteProject(proj, $event)" [attr.data-aid]="'btn-delete-project-' + proj.id" title="Delete App">
+              🗑️ Delete
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: API REGISTRY FOR SELECTED APP -->
+  <div *ngIf="activeTab === 'apis'" class="animate-slide-up" data-aid="view-apis">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+      <div>
+        <h2>Registered APIs for {{ selectedProject?.name || 'App' }}</h2>
+        <p style="color: var(--text-secondary); font-size: 0.875rem;">
+          Register and configure endpoints connecting {{ selectedProject?.name }} with isolated schemas, HTTP methods, and mapping rules.
+        </p>
+      </div>
+      <div style="display: flex; gap: 10px;">
+        <button *ngIf="registeredApis.length === 0" class="btn btn-secondary" (click)="loadSampleApisForApp()" data-aid="btn-load-sample-apis">
+          ⚡ Load Sample APIs (Create &amp; Get)
+        </button>
+        <button class="btn btn-primary" (click)="openRegisterApiModal()" data-aid="btn-register-api">
+          + Register New API
+        </button>
+      </div>
+    </div>
+
+    <!-- Empty State -->
+    <div *ngIf="registeredApis.length === 0" class="glass-card" style="padding: 48px; text-align: center;">
+      <div style="font-size: 2.5rem; margin-bottom: 16px;">🔌</div>
+      <h3 style="font-size: 1.25rem;">No APIs Registered Yet for {{ selectedProject?.name }}</h3>
+      <p style="color: var(--text-secondary); max-width: 540px; margin: 8px auto 24px auto; font-size: 0.875rem; line-height: 1.5;">
+        Register endpoints (e.g. <code>POST /api/v1/customers</code> or <code>GET /api/v1/customers/&#123;id&#125;</code>) to point specific schemas and transformation rules for each API.
+      </p>
+      <div style="display: flex; justify-content: center; gap: 12px;">
+        <button class="btn btn-secondary" (click)="loadSampleApisForApp()">⚡ Load Sample APIs</button>
+        <button class="btn btn-primary" (click)="openRegisterApiModal()">+ Register First API</button>
+      </div>
+    </div>
+
+    <!-- APIs Grid -->
+    <div *ngIf="registeredApis.length > 0" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 20px;">
+      <div *ngFor="let api of registeredApis" class="glass-card" style="padding: 24px; display: flex; flex-direction: column; justify-content: space-between;">
+        <div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span class="badge" [style.background]="api.httpMethod === 'GET' ? 'rgba(59, 130, 246, 0.2)' : api.httpMethod === 'POST' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(245, 158, 11, 0.2)'"
+                    [style.color]="api.httpMethod === 'GET' ? '#60a5fa' : api.httpMethod === 'POST' ? '#34d399' : '#fbbf24'">
+                {{ api.httpMethod }}
+              </span>
+              <strong style="font-family: monospace; font-size: 0.9375rem;">{{ api.endpointPath }}</strong>
+            </div>
+            <span class="badge" [class.badge-high]="api.direction === 'SOURCE_TO_TARGET'" [class.badge-medium]="api.direction === 'TARGET_TO_SOURCE'">
+              {{ api.direction === 'SOURCE_TO_TARGET' ? 'WRITE' : 'READ' }}
+            </span>
+          </div>
+
+          <h3 style="font-size: 1.0625rem; margin-bottom: 8px;">{{ api.name }}</h3>
+          <p style="color: var(--text-secondary); font-size: 0.8125rem; margin-bottom: 16px;">
+            {{ api.description || 'No description provided.' }}
+          </p>
+
+          <div style="background: rgba(0,0,0,0.25); border-radius: 6px; padding: 10px 12px; margin-bottom: 16px; font-size: 0.75rem; color: var(--text-muted);">
+            <div>Target URL: <code>{{ api.targetUrl || 'Internal Gateway Proxy' }}</code></div>
+            <div style="margin-top: 4px;">
+              Source Schema: <span [style.color]="api.sourceSchema ? '#34d399' : '#f87171'">{{ api.sourceSchema ? 'Configured ✓' : 'Missing' }}</span> | 
+              Target Schema: <span [style.color]="api.targetSchema ? '#34d399' : '#f87171'">{{ api.targetSchema ? 'Configured ✓' : 'Missing' }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-subtle); padding-top: 14px;">
+          <div style="display: flex; gap: 8px;">
+            <button class="btn btn-secondary btn-sm" (click)="selectApi(api)">Point Details</button>
+            <button class="btn btn-primary btn-sm" (click)="openApiTest(api)">Test Transform</button>
+          </div>
+          <button class="btn btn-secondary btn-sm" style="color: #f87171;" (click)="deleteApi(api.id)" title="Delete API">✕</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 2: SETUP & SCHEMAS -->
+  <div *ngIf="activeTab === 'setup'" class="animate-slide-up" data-aid="view-setup">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+      <div>
+        <h2>Project Schemas &amp; Data Contract Setup</h2>
+        <p style="color: var(--text-secondary); font-size: 0.875rem;">
+          Active Project: <strong>{{ selectedProject?.name }}</strong>
+        </p>
+      </div>
+      <div style="display: flex; gap: 10px;">
+        <button class="btn btn-secondary" (click)="loadPromptSampleData()" [disabled]="isImportingSchemas" data-aid="btn-load-sample">
+          {{ isImportingSchemas ? 'Extracting Schemas...' : 'Load User Profile Prompt Sample' }}
+        </button>
+        <button class="btn btn-primary" (click)="proceedToMapping()" [disabled]="isImportingSchemas" data-aid="btn-proceed-to-mapping">
+          {{ isImportingSchemas ? 'Importing & Generating...' : 'Proceed to Mapping &rarr;' }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Explanatory Banner: Design-Time Specification vs Real Data -->
+    <div class="glass-card" style="margin-bottom: 20px; background: rgba(59, 130, 246, 0.08); border-color: rgba(59, 130, 246, 0.3); padding: 16px 20px;">
+      <div style="display: flex; gap: 14px; align-items: flex-start;">
+        <div style="font-size: 1.5rem; line-height: 1;">ℹ️</div>
+        <div>
+          <h4 style="color: #60a5fa; margin: 0 0 6px 0; font-size: 0.9375rem;">
+            Project Schemas &amp; Data Contract Setup — What Does This Do?
+          </h4>
+          <p style="color: var(--text-secondary); font-size: 0.8125rem; line-height: 1.5; margin: 0;">
+            This section defines the <strong>Design-Time Contract Specification</strong> (data types, expected field names, date formats, and validation constraints). 
+            <strong>This is NOT live customer data.</strong> The sample JSON or JSON Schema you provide here is used by SchemaBridge AI to extract data models, identify semantic correspondences, and generate the deterministic translation rules. 
+            Once approved, live runtime production traffic flows through the <strong>API Registry &amp; Gateway</strong>.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Error Banner if any -->
+    <div *ngIf="setupErrorMessage" class="glass-card" style="margin-bottom: 20px; border-color: var(--badge-low-border); background: rgba(239, 68, 68, 0.1); padding: 14px 20px; color: #fca5a5; display: flex; justify-content: space-between; align-items: center;">
+      <span><strong>Warning:</strong> {{ setupErrorMessage }}</span>
+      <button class="btn btn-secondary btn-sm" (click)="setupErrorMessage = ''">Dismiss</button>
+    </div>
+
+    <div class="dual-panel-grid">
+      <!-- Source Schema Panel -->
+      <div class="glass-card editor-card" data-aid="panel-source-schema">
+        <div class="panel-header">
+          <div>
+            <h3>Source Schema (System A)</h3>
+            <span style="font-size: 0.75rem; color: var(--text-muted);">Payload produced by upstream system</span>
+          </div>
+          <select [(ngModel)]="sourceSchemaType" style="width: 150px;" data-aid="select-source-type">
+            <option value="SAMPLE_JSON">Sample JSON</option>
+            <option value="JSON_SCHEMA">JSON Schema</option>
+            <option value="OPENAPI">OpenAPI 3.0</option>
+          </select>
+        </div>
+        <textarea class="editor-box code-editor" [(ngModel)]="sourceSchemaInput" placeholder="Paste source JSON payload or schema..." data-aid="input-source-schema"></textarea>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px;">
+          <span style="font-size: 0.75rem; color: var(--accent-secondary);">Extracted fields: {{ sourceFields.length }}</span>
+          <button class="btn btn-secondary btn-sm" (click)="importSource()" data-aid="btn-import-source">
+            Import &amp; Extract Fields
+          </button>
+        </div>
+      </div>
+
+      <!-- Target Schema Panel -->
+      <div class="glass-card editor-card" data-aid="panel-target-schema">
+        <div class="panel-header">
+          <div>
+            <h3>Target Schema (System B)</h3>
+            <span style="font-size: 0.75rem; color: var(--text-muted);">Specification required by downstream system</span>
+          </div>
+          <select [(ngModel)]="targetSchemaType" style="width: 150px;" data-aid="select-target-type">
+            <option value="SAMPLE_JSON">Sample JSON / Contract</option>
+            <option value="JSON_SCHEMA">JSON Schema</option>
+            <option value="OPENAPI">OpenAPI 3.0</option>
+          </select>
+        </div>
+        <textarea class="editor-box code-editor" [(ngModel)]="targetSchemaInput" placeholder="Paste target schema or JSON contract..." data-aid="input-target-schema"></textarea>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px;">
+          <span style="font-size: 0.75rem; color: var(--accent-secondary);">Target fields: {{ targetFields.length }}</span>
+          <button class="btn btn-secondary btn-sm" (click)="importTarget()" data-aid="btn-import-target">
+            Import &amp; Extract Fields
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 3: MAPPING WORKSPACE (3 COLUMNS) -->
+  <div *ngIf="activeTab === 'mapping'" class="animate-slide-up" data-aid="view-mapping">
+    <!-- Notice if schemas missing -->
+    <div *ngIf="sourceFields.length === 0 || targetFields.length === 0" class="glass-card" style="margin-bottom: 20px; border-color: var(--badge-medium-border); background: rgba(245, 158, 11, 0.1); padding: 16px 24px; display: flex; justify-content: space-between; align-items: center;">
+      <div>
+        <h4 style="color: #fbbf24; margin-bottom: 4px;">Schemas Not Imported Yet</h4>
+        <p style="color: var(--text-secondary); font-size: 0.8125rem;">This project needs source and target schemas imported before mapping rules can be generated.</p>
+      </div>
+      <button class="btn btn-primary btn-sm" (click)="activeTab = 'setup'">Go to Setup &amp; Schemas &rarr;</button>
+    </div>
+
+    <!-- Natural Language Instruction Box -->
+    <div class="glass-card nl-prompt-container" data-aid="panel-natural-language">
+      <input type="text" class="nl-input" [(ngModel)]="nlInstruction"
+             placeholder="Natural Language AI Assistant: e.g. 'Set accountEnabled to true when active is Yes' or 'Combine firstName and lastName into displayName'"
+             (keyup.enter)="convertNaturalLanguage()" data-aid="input-natural-language" />
+      <button class="btn btn-primary" (click)="convertNaturalLanguage()" [disabled]="isConvertingNl" data-aid="btn-convert-nl">
+        {{ isConvertingNl ? 'Analyzing...' : 'Convert with Aviator AI' }}
+      </button>
+    </div>
+
+    <!-- Quick Actions Toolbar -->
+    <div class="glass-card action-toolbar">
+      <div style="display: flex; align-items: center; gap: 16px;">
+        <span style="font-size: 0.875rem; font-weight: 700;">Version: v{{ activeMapping?.version || 1 }}</span>
+        <span class="badge" [class.badge-high]="activeMapping?.status === 'PUBLISHED'"
+              [class.badge-medium]="activeMapping?.status === 'APPROVED'"
+              [class.badge-low]="activeMapping?.status === 'DRAFT' || activeMapping?.status === 'SUGGESTED'">
+          {{ activeMapping?.status || 'DRAFT' }}
+        </span>
+
+        <div class="filter-group">
+          <button class="filter-btn" [class.active]="ruleFilter === 'ALL'" (click)="ruleFilter = 'ALL'" data-aid="filter-all">
+            All ({{ activeMapping?.rules?.length || 0 }})
+          </button>
+          <button class="filter-btn" [class.active]="ruleFilter === 'REVIEW'" (click)="ruleFilter = 'REVIEW'" data-aid="filter-review">
+            Review Required
+          </button>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 10px;">
+        <button class="btn btn-primary btn-sm" (click)="openCustomRuleModal()" data-aid="btn-open-custom-rule">
+          + Add Custom Rule
+        </button>
+        <button class="btn btn-secondary btn-sm" (click)="generateMappings()" data-aid="btn-generate-mappings">
+          Generate 5-Level Suggestions
+        </button>
+        <button class="btn btn-secondary btn-sm" (click)="cloneMapping()" data-aid="btn-clone-mapping">
+          Clone Version
+        </button>
+        <button class="btn btn-secondary btn-sm" (click)="approveMapping()" data-aid="btn-approve-mapping">
+          Approve All
+        </button>
+        <button class="btn btn-success btn-sm" (click)="publishMapping()" data-aid="btn-publish-mapping">
+          Publish v{{ activeMapping?.version }}
+        </button>
+      </div>
+    </div>
+
+    <!-- 3-Column Mapping Grid -->
+    <div class="mapping-workspace-grid">
+      <!-- Left Column: Source Fields -->
+      <div class="glass-card workspace-panel" data-aid="col-source-fields">
+        <h4 style="color: var(--text-primary);">Source Fields</h4>
+        <div class="field-list">
+          <div *ngFor="let sf of sourceFields" class="field-card" [attr.data-aid]="'source-field-' + sf.fieldPath">
+            <div class="field-name">
+              <span>{{ sf.fieldPath }}</span>
+              <span class="badge badge-op" style="font-size: 0.65rem;">{{ sf.dataType }}</span>
+            </div>
+            <div class="field-meta" *ngIf="sf.sampleValue">
+              <span style="color: var(--text-muted);">Sample:</span>
+              <span style="color: var(--text-secondary); font-family: var(--font-mono);">"{{ sf.sampleValue }}"</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Center Column: Mapping Rules -->
+      <div class="glass-card workspace-panel" data-aid="col-mapping-rules">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <h4>Active Mapping Rules</h4>
+          <span style="font-size: 0.75rem; color: var(--text-muted);">{{ filteredRules.length }} rules</span>
+        </div>
+
+        <div class="mapping-cards-container">
+          <div *ngFor="let rule of filteredRules; let i = index" class="mapping-rule-card"
+               [class.review-required]="rule.requiresReview"
+               [attr.data-aid]="'mapping-rule-card-' + i">
+            <div class="rule-header">
+              <div class="rule-connection">
+                <span class="source-tag">{{ rule.sourcePaths.join(' + ') }}</span>
+                <span class="arrow-icon">&rarr;</span>
+                <span class="target-tag">{{ rule.targetPath }}</span>
+              </div>
+
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="badge" [class.badge-high]="rule.confidenceLevel === 'HIGH'"
+                      [class.badge-medium]="rule.confidenceLevel === 'MEDIUM'"
+                      [class.badge-low]="rule.confidenceLevel === 'LOW'">
+                  {{ (rule.confidence * 100).toFixed(0) }}% {{ rule.confidenceLevel }}
+                </span>
+                <span class="badge badge-method">{{ rule.matchMethod }}</span>
+              </div>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 0.75rem; color: var(--text-muted);">Operation:</span>
+              <span class="badge badge-op">{{ rule.operation }}</span>
+            </div>
+
+            <div class="rule-explanation">
+              {{ rule.explanation }}
+            </div>
+
+            <div class="rule-actions">
+              <button class="btn btn-secondary btn-sm" (click)="openEditRule(rule, i)" [attr.data-aid]="'btn-edit-rule-' + i">
+                Edit
+              </button>
+              <button class="btn btn-danger btn-sm" (click)="deleteRule(i)" [attr.data-aid]="'btn-delete-rule-' + i">
+                Reject
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Target Fields -->
+      <div class="glass-card workspace-panel" data-aid="col-target-fields">
+        <h4 style="color: var(--text-primary);">Target Fields</h4>
+        <div class="field-list">
+          <div *ngFor="let tf of targetFields" class="field-card" [attr.data-aid]="'target-field-' + tf.fieldPath">
+            <div class="field-name">
+              <span>{{ tf.fieldPath }}</span>
+              <span class="badge badge-op" style="font-size: 0.65rem;">{{ tf.dataType }}</span>
+            </div>
+            <div class="field-meta" *ngIf="tf.format">
+              <span style="color: var(--text-muted);">Format:</span>
+              <span style="color: var(--accent-secondary); font-family: var(--font-mono);">{{ tf.format }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 4: TRANSFORMATION LAB -->
+  <div *ngIf="activeTab === 'preview'" class="animate-slide-up" data-aid="view-transformation-lab">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+      <div>
+        <h2>Deterministic Transformation &amp; Validation Lab</h2>
+        <p style="color: var(--text-secondary); font-size: 0.875rem;">
+          Executes stored rules deterministically in pure Java. Zero production AI overhead.
+        </p>
+      </div>
+      <button class="btn btn-primary" (click)="runTransformation()" [disabled]="isTransforming" data-aid="btn-run-transformation">
+        {{ isTransforming ? 'Transforming...' : 'Run Deterministic Transformation' }}
+      </button>
+    </div>
+
+    <div class="dual-panel-grid">
+      <!-- Source Payload Editor -->
+      <div class="glass-card editor-card" data-aid="panel-preview-source">
+        <div class="panel-header">
+          <h3>Input Source Payload (JSON)</h3>
+          <span class="badge badge-method">Source System A</span>
+        </div>
+        <textarea class="editor-box code-editor" [(ngModel)]="sourcePayloadText" data-aid="input-source-payload"></textarea>
+      </div>
+
+      <!-- Transformed Output Display -->
+      <div class="glass-card editor-card" data-aid="panel-preview-target">
+        <div class="panel-header">
+          <h3>Transformed Output (JSON)</h3>
+          <span class="badge badge-op">Target System B</span>
+        </div>
+        <textarea class="editor-box code-editor" [value]="transformedPayloadText" readonly placeholder="Click 'Run Deterministic Transformation' to inspect output..." data-aid="output-transformed-payload"></textarea>
+      </div>
+    </div>
+
+    <!-- Validation Result Card -->
+    <div *ngIf="previewResult" class="validation-card"
+         [class.valid]="previewResult.validation.valid"
+         [class.invalid]="!previewResult.validation.valid"
+         data-aid="card-validation-result">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h4 [style.color]="previewResult.validation.valid ? 'var(--color-success)' : 'var(--color-danger)'">
+          Target Schema Validation: {{ previewResult.validation.valid ? 'PASSED (100% Satisfied)' : 'FAILED' }}
+        </h4>
+        <span style="font-size: 0.8125rem;">Execution time: <strong>{{ previewResult.executionTimeMs }}ms</strong></span>
+      </div>
+
+      <div *ngIf="previewResult.validation.errors && previewResult.validation.errors.length > 0" style="margin-top: 10px;">
+        <div *ngFor="let err of previewResult.validation.errors" style="color: var(--color-danger); font-size: 0.8125rem;">
+          &bull; Field <strong>{{ err.field }}</strong>: {{ err.message }}
+        </div>
+      </div>
+
+      <div *ngIf="previewResult.appliedRules && previewResult.appliedRules.length > 0" style="margin-top: 14px;">
+        <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Applied Transformation Rules:</span>
+        <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px;">
+          <span *ngFor="let rule of previewResult.appliedRules" class="badge badge-method" style="font-size: 0.75rem;">
+            {{ rule }}
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 5: VERSIONS -->
+  <div *ngIf="activeTab === 'versions'" class="animate-slide-up" data-aid="view-versions">
+    <h2>Mapping Versions &amp; Evolution</h2>
+    <div style="margin-top: 20px; display: flex; flex-direction: column; gap: 16px;">
+      <div *ngFor="let ver of versions" class="glass-card" style="padding: 20px; display: flex; justify-content: space-between; align-items: center;"
+           [attr.data-aid]="'version-card-' + ver.version">
+        <div>
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <h3>Version {{ ver.version }}</h3>
+            <span class="badge" [class.badge-high]="ver.status === 'PUBLISHED'" [class.badge-medium]="ver.status === 'APPROVED'">
+              {{ ver.status }}
+            </span>
+          </div>
+          <div style="font-size: 0.8125rem; color: var(--text-muted); margin-top: 6px;">
+            Created by {{ ver.createdBy }} &bull; Rules: {{ ver.rules.length }} &bull; {{ ver.createdAt }}
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 10px;">
+          <button class="btn btn-secondary btn-sm" (click)="activeMapping = ver; activeTab = 'mapping'" data-aid="btn-view-version">
+            View Rules
+          </button>
+          <button class="btn btn-secondary btn-sm" (click)="cloneMapping()" data-aid="btn-clone-version">
+            Clone to New Draft
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 6: AUDIT TRAIL -->
+  <div *ngIf="activeTab === 'audit'" class="animate-slide-up" data-aid="view-audit">
+    <h2>Audit History &amp; Governance</h2>
+    <div class="glass-card" style="margin-top: 20px; overflow-x: auto;" data-aid="table-audit-trail">
+      <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.8125rem;">
+        <thead>
+          <tr style="border-bottom: 1px solid var(--border-subtle); color: var(--text-muted);">
+            <th style="padding: 12px 16px;">Timestamp</th>
+            <th style="padding: 12px 16px;">Entity</th>
+            <th style="padding: 12px 16px;">Action</th>
+            <th style="padding: 12px 16px;">User</th>
+            <th style="padding: 12px 16px;">Details</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let ev of auditEvents" style="border-bottom: 1px solid var(--border-subtle);">
+            <td style="padding: 12px 16px; color: var(--text-muted);">{{ ev.createdAt }}</td>
+            <td style="padding: 12px 16px; font-weight: 600;">{{ ev.entityType }}</td>
+            <td style="padding: 12px 16px;"><span class="badge badge-method">{{ ev.action }}</span></td>
+            <td style="padding: 12px 16px;">{{ ev.changedBy }}</td>
+            <td style="padding: 12px 16px; color: var(--text-secondary);">{{ ev.newValue }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</main>
+
+<!-- MODAL: NEW PROJECT -->
+<div *ngIf="showNewProjectModal" class="modal-backdrop" data-aid="modal-new-project">
+  <div class="modal-content animate-slide-up">
+    <h3 style="margin-bottom: 16px;">Create Integration Project</h3>
+    <div style="display: flex; flex-direction: column; gap: 14px;">
+      <div>
+        <label style="font-size: 0.75rem; color: var(--text-secondary);">Project Name *</label>
+        <input type="text" [(ngModel)]="newProjectName" (keyup.enter)="createProject()" placeholder="e.g. Employee HR to Identity Hub" data-aid="input-project-name" />
+      </div>
+      <div>
+        <label style="font-size: 0.75rem; color: var(--text-secondary);">Description</label>
+        <textarea rows="2" [(ngModel)]="newProjectDescription" placeholder="Project goals and context..." data-aid="input-project-desc"></textarea>
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div>
+          <label style="font-size: 0.75rem; color: var(--text-secondary);">Source System Name</label>
+          <input type="text" [(ngModel)]="newProjectSourceSystem" data-aid="input-source-system" />
+        </div>
+        <div>
+          <label style="font-size: 0.75rem; color: var(--text-secondary);">Target System Name</label>
+          <input type="text" [(ngModel)]="newProjectTargetSystem" data-aid="input-target-system" />
+        </div>
+      </div>
+    </div>
+    <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+      <button class="btn btn-secondary" (click)="showNewProjectModal = false" [disabled]="isCreatingProject" data-aid="btn-cancel-project">Cancel</button>
+      <button class="btn btn-primary" (click)="createProject()" [disabled]="isCreatingProject || !newProjectName.trim()" data-aid="btn-submit-project">
+        <span *ngIf="isCreatingProject" class="spinner" style="width: 14px; height: 14px; margin-right: 6px;"></span>
+        {{ isCreatingProject ? 'Creating...' : 'Create Project' }}
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: EDIT RULE -->
+<div *ngIf="showEditRuleModal && editingRule" class="modal-backdrop" data-aid="modal-edit-rule">
+  <div class="modal-content animate-slide-up">
+    <h3 style="margin-bottom: 16px;">Edit Mapping Rule</h3>
+    <div style="display: flex; flex-direction: column; gap: 14px;">
+      <div>
+        <label style="font-size: 0.75rem; color: var(--text-secondary);">Target Path</label>
+        <input type="text" [(ngModel)]="editingRule.targetPath" data-aid="input-edit-target-path" />
+      </div>
+      <div>
+        <label style="font-size: 0.75rem; color: var(--text-secondary);">Transformation Operation</label>
+        <select [(ngModel)]="editingRule.operation" data-aid="select-edit-operation">
+          <option *ngFor="let op of supportedOperations" [value]="op">{{ op }}</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size: 0.75rem; color: var(--text-secondary);">Explanation / Rationale</label>
+        <textarea rows="2" [(ngModel)]="editingRule.explanation" data-aid="input-edit-explanation"></textarea>
+      </div>
+    </div>
+    <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+      <button class="btn btn-secondary" (click)="showEditRuleModal = false" data-aid="btn-cancel-edit-rule">Cancel</button>
+      <button class="btn btn-primary" (click)="saveEditedRule()" data-aid="btn-save-edit-rule">Save Rule</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: REGISTER NEW API -->
+<div *ngIf="showNewApiModal" class="modal-backdrop" data-aid="modal-new-api">
+  <div class="modal-content animate-slide-up" style="max-width: 680px;">
+    <h3 style="margin-bottom: 16px;">Register New API Endpoint under {{ selectedProject?.name }}</h3>
+    
+    <div style="display: flex; flex-direction: column; gap: 14px;">
+      <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 12px;">
+        <div>
+          <label style="font-size: 0.75rem; color: var(--text-secondary);">API Name</label>
+          <input type="text" [(ngModel)]="newApiName" placeholder="e.g. Create Customer Profile" />
+        </div>
+        <div>
+          <label style="font-size: 0.75rem; color: var(--text-secondary);">Flow Direction</label>
+          <select [(ngModel)]="newApiDirection">
+            <option value="SOURCE_TO_TARGET">WRITE ({{ selectedProject?.name || 'SE -> CCP' }})</option>
+            <option value="TARGET_TO_SOURCE">READ ({{ selectedProject?.name || 'CCP -> SE' }})</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 120px 1fr; gap: 12px;">
+        <div>
+          <label style="font-size: 0.75rem; color: var(--text-secondary);">HTTP Method</label>
+          <select [(ngModel)]="newApiMethod">
+            <option value="GET">GET</option>
+            <option value="POST">POST</option>
+            <option value="PUT">PUT</option>
+            <option value="PATCH">PATCH</option>
+            <option value="DELETE">DELETE</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size: 0.75rem; color: var(--text-secondary);">Endpoint Path</label>
+          <input type="text" [(ngModel)]="newApiPath" placeholder="/api/v1/customers" />
+        </div>
+      </div>
+
+      <div>
+        <label style="font-size: 0.75rem; color: var(--text-secondary);">Target Downstream URL (System B)</label>
+        <input type="text" [(ngModel)]="newApiTargetUrl" placeholder="https://cloud-erp.internal/api/v1/customers" />
+      </div>
+
+      <div>
+        <label style="font-size: 0.75rem; color: var(--text-secondary);">Description / Purpose</label>
+        <input type="text" [(ngModel)]="newApiDescription" placeholder="Translates legacy customer payload to modern cloud enterprise schema..." />
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div>
+          <label style="font-size: 0.75rem; color: var(--text-secondary);">Source Schema / Sample JSON</label>
+          <textarea rows="6" class="code-editor" [(ngModel)]="newApiSourceSchema" placeholder="Paste source JSON..."></textarea>
+        </div>
+        <div>
+          <label style="font-size: 0.75rem; color: var(--text-secondary);">Target Schema / Sample JSON</label>
+          <textarea rows="6" class="code-editor" [(ngModel)]="newApiTargetSchema" placeholder="Paste target JSON..."></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+      <button class="btn btn-secondary" (click)="showNewApiModal = false">Cancel</button>
+      <button class="btn btn-primary" (click)="createApi()">Register API</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: CONFIGURE API DETAILS -->
+<div *ngIf="showApiDetailsModal && selectedApi" class="modal-backdrop" data-aid="modal-api-details">
+  <div class="modal-content animate-slide-up" style="max-width: 720px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+      <h3 style="margin: 0;">Configure API: {{ selectedApi.name }}</h3>
+      <span class="badge badge-high">{{ selectedApi.status }}</span>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 14px;">
+      <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 12px;">
+        <div>
+          <label style="font-size: 0.75rem; color: var(--text-secondary);">API Name</label>
+          <input type="text" [(ngModel)]="selectedApi.name" />
+        </div>
+        <div>
+          <label style="font-size: 0.75rem; color: var(--text-secondary);">Direction</label>
+          <select [(ngModel)]="selectedApi.direction">
+            <option value="SOURCE_TO_TARGET">WRITE</option>
+            <option value="TARGET_TO_SOURCE">READ</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 120px 1fr; gap: 12px;">
+        <div>
+          <label style="font-size: 0.75rem; color: var(--text-secondary);">Method</label>
+          <select [(ngModel)]="selectedApi.httpMethod">
+            <option value="GET">GET</option>
+            <option value="POST">POST</option>
+            <option value="PUT">PUT</option>
+            <option value="PATCH">PATCH</option>
+            <option value="DELETE">DELETE</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size: 0.75rem; color: var(--text-secondary);">Endpoint Path</label>
+          <input type="text" [(ngModel)]="selectedApi.endpointPath" />
+        </div>
+      </div>
+
+      <div>
+        <label style="font-size: 0.75rem; color: var(--text-secondary);">Downstream Target URL</label>
+        <input type="text" [(ngModel)]="selectedApi.targetUrl" />
+      </div>
+
+      <div>
+        <label style="font-size: 0.75rem; color: var(--text-secondary);">Description</label>
+        <input type="text" [(ngModel)]="selectedApi.description" />
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div>
+          <label style="font-size: 0.75rem; color: var(--text-secondary);">Source Schema / Sample JSON</label>
+          <textarea rows="7" class="code-editor" [(ngModel)]="selectedApi.sourceSchema"></textarea>
+        </div>
+        <div>
+          <label style="font-size: 0.75rem; color: var(--text-secondary);">Target Schema / Sample JSON</label>
+          <textarea rows="7" class="code-editor" [(ngModel)]="selectedApi.targetSchema"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+      <button class="btn btn-secondary" (click)="showApiDetailsModal = false">Cancel</button>
+      <button class="btn btn-primary" (click)="saveApiDetails()">Save API Details</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: TEST API TRANSFORMATION -->
+<div *ngIf="showApiTestModal && selectedApi" class="modal-backdrop" data-aid="modal-api-test">
+  <div class="modal-content animate-slide-up" style="max-width: 760px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+      <div>
+        <h3 style="margin: 0;">Test Endpoint: {{ selectedApi.name }}</h3>
+        <p style="font-size: 0.8125rem; color: var(--text-muted); margin-top: 4px;">
+          <code>{{ selectedApi.httpMethod }} {{ selectedApi.endpointPath }}</code> &bull; {{ selectedApi.direction === 'SOURCE_TO_TARGET' ? 'WRITE Flow' : 'READ Flow' }}
+        </p>
+      </div>
+      <button class="btn btn-primary btn-sm" (click)="executeApiTest()" [disabled]="isTestingApi">
+        {{ isTestingApi ? 'Transforming...' : '▶ Run Transform' }}
+      </button>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+      <div>
+        <label style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 6px; display: block;">
+          Input Payload (Sent by caller)
+        </label>
+        <textarea rows="12" class="code-editor" [(ngModel)]="apiTestPayload" style="width: 100%;"></textarea>
+      </div>
+
+      <div>
+        <label style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 6px; display: block;">
+          Deterministic Output (Sent to destination)
+        </label>
+        <div *ngIf="!apiTestResult" style="height: 250px; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.3); border-radius: 6px; color: var(--text-muted); font-size: 0.8125rem;">
+          Click "Run Transform" to test execution
+        </div>
+        <pre *ngIf="apiTestResult" class="code-editor" style="height: 250px; overflow: auto; background: rgba(0,0,0,0.4); border-radius: 6px; padding: 12px; margin: 0; font-size: 0.8125rem; color: #34d399;">{{ apiTestResult | json }}</pre>
+      </div>
+    </div>
+
+    <div style="display: flex; justify-content: flex-end; margin-top: 18px;">
+      <button class="btn btn-secondary" (click)="showApiTestModal = false">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: ADD CUSTOM MAPPING RULE -->
+<div *ngIf="showCustomRuleModal" class="modal-backdrop" data-aid="modal-custom-rule">
+  <div class="modal-content animate-slide-up" style="max-width: 580px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+      <h3 style="margin: 0;">Add Custom Mapping Rule</h3>
+      <button class="btn btn-secondary btn-sm" (click)="showCustomRuleModal = false">✕</button>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 14px;">
+      <div>
+        <label style="font-size: 0.75rem; color: var(--text-secondary); display: block; margin-bottom: 4px;">
+          Source Field Path(s) (comma-separated for multi-field operations like CONCAT)
+        </label>
+        <input type="text" [(ngModel)]="customRuleSourcePaths" placeholder="e.g. name or firstName, lastName or contact.email" data-aid="input-custom-source-paths" />
+        <div *ngIf="sourceFields.length > 0" style="margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px;">
+          <span *ngFor="let sf of sourceFields" (click)="customRuleSourcePaths = sf.fieldPath"
+                style="font-size: 0.7rem; background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px; cursor: pointer;"
+                title="Click to select as source">
+            {{ sf.fieldPath }}
+          </span>
+        </div>
+      </div>
+
+      <div>
+        <label style="font-size: 0.75rem; color: var(--text-secondary); display: block; margin-bottom: 4px;">
+          Target Field Path (in destination System B schema) *
+        </label>
+        <input type="text" [(ngModel)]="customRuleTargetPath" placeholder="e.g. userName or dateOfBirth or contact.emailAddress" data-aid="input-custom-target-path" />
+        <div *ngIf="targetFields.length > 0" style="margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px;">
+          <span *ngFor="let tf of targetFields" (click)="customRuleTargetPath = tf.fieldPath"
+                style="font-size: 0.7rem; background: rgba(59,130,246,0.15); color: #93c5fd; padding: 2px 6px; border-radius: 4px; cursor: pointer;"
+                title="Click to select as target">
+            {{ tf.fieldPath }}
+          </span>
+        </div>
+      </div>
+
+      <div>
+        <label style="font-size: 0.75rem; color: var(--text-secondary); display: block; margin-bottom: 4px;">
+          Transformation Operation
+        </label>
+        <select [(ngModel)]="customRuleOperation" data-aid="select-custom-operation">
+          <option *ngFor="let op of supportedOperations" [value]="op">{{ op }}</option>
+        </select>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div>
+          <label style="font-size: 0.75rem; color: var(--text-secondary); display: block; margin-bottom: 4px;">
+            Parameter Key (Optional)
+          </label>
+          <input type="text" [(ngModel)]="customRuleParameterKey" placeholder="e.g. separator or targetFormat" data-aid="input-custom-param-key" />
+        </div>
+        <div>
+          <label style="font-size: 0.75rem; color: var(--text-secondary); display: block; margin-bottom: 4px;">
+            Parameter Value (Optional)
+          </label>
+          <input type="text" [(ngModel)]="customRuleParameterValue" placeholder="e.g. ' ' or yyyy-MM-dd" data-aid="input-custom-param-val" />
+        </div>
+      </div>
+
+      <div>
+        <label style="font-size: 0.75rem; color: var(--text-secondary); display: block; margin-bottom: 4px;">
+          Explanation / Rationale
+        </label>
+        <input type="text" [(ngModel)]="customRuleExplanation" placeholder="e.g. Combine first and last name for CCP system" data-aid="input-custom-explanation" />
+      </div>
+    </div>
+
+    <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px;">
+      <button class="btn btn-secondary" (click)="showCustomRuleModal = false" data-aid="btn-cancel-custom-rule">Cancel</button>
+      <button class="btn btn-primary" (click)="saveCustomRule()" [disabled]="!customRuleTargetPath.trim()" data-aid="btn-save-custom-rule">
+        Save Custom Rule
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: ARCHITECTURE & GATEWAY GUIDE -->
+<div *ngIf="showArchitectureGuide" class="modal-backdrop" data-aid="modal-architecture-guide">
+  <div class="modal-content animate-slide-up" style="max-width: 820px; max-height: 85vh; overflow-y: auto;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
+      <div>
+        <h2 style="font-size: 1.35rem; margin: 0 0 6px 0;">How SchemaBridge AI Connects System A &amp; System B</h2>
+        <p style="color: var(--text-secondary); font-size: 0.8125rem; margin: 0;">
+          Step-by-step architectural guide on configuring SchemaBridge between your disparate systems
+        </p>
+      </div>
+      <button class="btn btn-secondary btn-sm" (click)="showArchitectureGuide = false">✕ Close</button>
+    </div>
+
+    <!-- Architectural Diagram -->
+    <div style="background: rgba(0,0,0,0.35); border-radius: 8px; padding: 20px; margin-bottom: 20px; font-family: monospace; font-size: 0.8125rem; line-height: 1.6; border: 1px solid var(--border-subtle);">
+      <div style="color: #60a5fa; font-weight: bold; margin-bottom: 8px;">LIVE DATA FLOW:</div>
+      <div>[ System A (SE) ]</div>
+      <div>      │</div>
+      <div>      │ 1. Sends native payload (e.g. POST http://localhost:8080/api/projects/&#123;appId&#125;/apis/&#123;apiId&#125;/transform)</div>
+      <div>      ▼</div>
+      <div style="color: #34d399; font-weight: bold;">[ SchemaBridge AI Gateway ]</div>
+      <div>      ├─ 2. Inbound Contract Validation (Strict JSON / OpenAPI schema check)</div>
+      <div>      ├─ 3. Pure Java Deterministic Transformation (&lt;5ms runtime latency, ZERO LLM in hot path)</div>
+      <div>      └─ 4. Outbound Contract Validation (Validates output matches System B structure)</div>
+      <div>      │</div>
+      <div>      │ 5. Forwards converted payload or returns to caller</div>
+      <div>      ▼</div>
+      <div>[ System B (CCP) Target URL ]</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 16px; font-size: 0.875rem; color: var(--text-secondary); line-height: 1.6;">
+      <div>
+        <strong style="color: var(--text-primary); display: block; margin-bottom: 4px;">1. Design-Time Contract Setup (Setup &amp; Schemas Tab)</strong>
+        Import a sample JSON or JSON Schema for System A and System B. This defines the <em>data contract</em> (field names, types, formats). It is not real customer data; it is the blueprint.
+      </div>
+      <div>
+        <strong style="color: var(--text-primary); display: block; margin-bottom: 4px;">2. Mapping &amp; AI Assistance (Mapping Workspace Tab)</strong>
+        SchemaBridge's 5-level pipeline matches fields automatically (Exact, Normalized, Type, Arrays, Defaults). You can add custom rules or use Aviator AI to convert plain English commands. Once satisfied, click <strong>Publish Version</strong> to freeze the deterministic transformation contract.
+      </div>
+      <div>
+        <strong style="color: var(--text-primary); display: block; margin-bottom: 4px;">3. API Registration (API Registry Tab)</strong>
+        Register the endpoints under your App (e.g. <code>POST /api/v1/customers</code> or <code>GET /api/v1/customers/&#123;id&#125;</code>) and point the downstream Target URL (e.g. <code>https://ccp.enterprise.internal/v1/customers</code>).
+      </div>
+      <div>
+        <strong style="color: var(--text-primary); display: block; margin-bottom: 4px;">4. Runtime Invocation (Zero Code Changes in System B)</strong>
+        Configure System A to send requests to SchemaBridge instead of System B. SchemaBridge converts the payload in real-time according to the approved rules and delivers the translated payload to System B.
+      </div>
+    </div>
+
+    <div style="display: flex; justify-content: flex-end; margin-top: 24px;">
+      <button class="btn btn-primary" (click)="showArchitectureGuide = false">Got it, Let's Build!</button>
+    </div>
+  </div>
+</div>

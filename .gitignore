@@ -1,0 +1,44 @@
+# Credentials & Secrets — NEVER commit these
+credentials/
+*.json.key
+*.pem
+*.p12
+*.pfx
+.env
+.env.*
+
+# Java build artifacts
+backend/target/
+*.class
+*.jar
+*.war
+
+# Frontend build
+frontend/dist/
+frontend/.angular/
+node_modules/
+
+# Python
+.venv/
+*/.venv/
+**/.venv/
+venv/
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
+*.iml
+*.iws
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+*.log
+

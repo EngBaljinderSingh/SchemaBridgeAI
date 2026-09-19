@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: schemabridge-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: schemabridge
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: schemabridge-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  aviator:
+    build:
+      context: ./aviator_adt
+      dockerfile: Dockerfile
+    container_name: schemabridge-aviator
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /credentials/credentials.json
+      LLM_PROVIDER: google_genai
+      LLM_MODEL: gemini-2.5-flash-lite
+      LLM_LOCATION: europe-west4
+      BIND_ADDRESS: 0.0.0.0
+      BIND_PORT: 3000
+      VECTOR_STORE: memory
+      CHECKPOINTER: memory
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DATABASE: schemabridge
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./credentials:/credentials:ro
+
+  schemabridge-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: schemabridge-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: postgres
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: schemabridge
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      AVIATOR_BASE_URL: http://aviator:3000
+    ports:
+      - "8080:8080"
+
+  schemabridge-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: schemabridge-frontend
+    restart: unless-stopped
+    depends_on:
+      - schemabridge-backend
+    ports:
+      - "4200:80"
+
+volumes:
+  pgdata:

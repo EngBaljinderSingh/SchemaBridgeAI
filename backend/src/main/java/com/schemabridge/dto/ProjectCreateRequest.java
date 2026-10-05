@@ -16,4 +16,7 @@ public class ProjectCreateRequest {
     private String description;
     private String sourceSystemName;
     private String targetSystemName;
+    private String approverEmail;
+    @Builder.Default
+    private boolean autoApproveEnabled = true;
 }

@@ -20,6 +20,8 @@ public class ProjectResponse {
     private String createdBy;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private String approverEmail;
+    private boolean autoApproveEnabled;
     private int systemCount;
     private int mappingVersionCount;
     private Integer latestPublishedVersion;

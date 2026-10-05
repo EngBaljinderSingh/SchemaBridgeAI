@@ -10,7 +10,10 @@ import {
   TransformationExecuteResponse,
   ValidationResult,
   AuditEvent,
-  AviatorHealth
+  AviatorHealth,
+  ApiEndpointSummary,
+  TracePayloadRequest,
+  EndpointSelectionImportRequest
 } from '../models/schema-bridge.models';
 
 @Injectable({
@@ -31,7 +34,7 @@ export class ApiService {
     return this.http.get<Project>(`${this.baseUrl}/projects/${id}`);
   }
 
-  createProject(data: { name: string; description?: string; sourceSystemName?: string; targetSystemName?: string }): Observable<Project> {
+  createProject(data: { name: string; description?: string; sourceSystemName?: string; targetSystemName?: string; approverEmail?: string; autoApproveEnabled?: boolean }): Observable<Project> {
     return this.http.post<Project>(`${this.baseUrl}/projects`, data);
   }
 
@@ -54,6 +57,46 @@ export class ApiService {
 
   importTargetSchema(projectId: string, data: { schemaType: string; schemaContent: string; schemaName?: string; systemName?: string }): Observable<SchemaResponse> {
     return this.http.post<SchemaResponse>(`${this.baseUrl}/projects/${projectId}/schemas/target`, { ...data, direction: 'TARGET_TO_SOURCE' });
+  }
+
+  // Upload a Swagger/OpenAPI (JSON or YAML) or JSON Schema file - server auto-detects type and extracts fields
+  uploadSourceSchema(projectId: string, file: File, systemName?: string): Observable<SchemaResponse> {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (systemName) {
+      formData.append('systemName', systemName);
+    }
+    return this.http.post<SchemaResponse>(`${this.baseUrl}/projects/${projectId}/schemas/source/upload`, formData);
+  }
+
+  uploadTargetSchema(projectId: string, file: File, systemName?: string): Observable<SchemaResponse> {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (systemName) {
+      formData.append('systemName', systemName);
+    }
+    return this.http.post<SchemaResponse>(`${this.baseUrl}/projects/${projectId}/schemas/target/upload`, formData);
+  }
+
+  // Trace live HTTP payload or sample JSON from system with NO Swagger
+  tracePayload(projectId: string, req: TracePayloadRequest): Observable<SchemaResponse> {
+    return this.http.post<SchemaResponse>(`${this.baseUrl}/projects/${projectId}/schemas/trace`, req);
+  }
+
+  // Parse endpoints from Swagger file for selective mapping
+  parseEndpointsFromFile(projectId: string, file: File): Observable<ApiEndpointSummary[]> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http.post<ApiEndpointSummary[]>(`${this.baseUrl}/projects/${projectId}/schemas/parse-endpoints`, formData);
+  }
+
+  parseEndpointsFromRaw(projectId: string, rawContent: string): Observable<ApiEndpointSummary[]> {
+    return this.http.post<ApiEndpointSummary[]>(`${this.baseUrl}/projects/${projectId}/schemas/parse-endpoints/raw`, rawContent);
+  }
+
+  // Import schema filtered by selected endpoints
+  importSelectedEndpoints(projectId: string, req: EndpointSelectionImportRequest): Observable<SchemaResponse> {
+    return this.http.post<SchemaResponse>(`${this.baseUrl}/projects/${projectId}/schemas/import-selected`, req);
   }
 
   getSchemas(projectId: string): Observable<SchemaResponse[]> {
@@ -79,6 +122,18 @@ export class ApiService {
 
   approveMapping(projectId: string, mappingId: string, approvedBy: string = 'admin'): Observable<MappingDefinition> {
     return this.http.post<MappingDefinition>(`${this.baseUrl}/projects/${projectId}/mappings/${mappingId}/approve?approvedBy=${approvedBy}`, {});
+  }
+
+  approveAllMappings(projectId: string, mappingId: string, approvedBy: string = 'admin'): Observable<MappingDefinition> {
+    return this.http.post<MappingDefinition>(`${this.baseUrl}/projects/${projectId}/mappings/${mappingId}/approve-all?approvedBy=${approvedBy}`, {});
+  }
+
+  approveAllHighConfidence(projectId: string, mappingId: string, approvedBy: string = 'admin'): Observable<MappingDefinition> {
+    return this.http.post<MappingDefinition>(`${this.baseUrl}/projects/${projectId}/mappings/${mappingId}/approve-all-high-confidence?approvedBy=${approvedBy}`, {});
+  }
+
+  invertMapping(projectId: string, mappingId: string, createdBy: string = 'admin'): Observable<MappingDefinition> {
+    return this.http.post<MappingDefinition>(`${this.baseUrl}/projects/${projectId}/mappings/${mappingId}/invert?createdBy=${createdBy}`, {});
   }
 
   publishMapping(projectId: string, mappingId: string, publishedBy: string = 'admin'): Observable<MappingDefinition> {

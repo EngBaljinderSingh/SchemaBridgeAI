@@ -51,10 +51,16 @@ public class ProjectService {
 
     @Transactional
     public ProjectResponse createProject(ProjectCreateRequest req) {
+        String approver = (req.getApproverEmail() != null && !req.getApproverEmail().isBlank())
+                ? req.getApproverEmail().trim()
+                : "approver@enterprise.com";
+
         IntegrationProject project = IntegrationProject.builder()
                 .name(req.getName())
                 .description(req.getDescription())
                 .status(ProjectStatus.ACTIVE)
+                .approverEmail(approver)
+                .autoApproveEnabled(req.isAutoApproveEnabled())
                 .build();
         project = projectRepository.save(project);
 
@@ -200,6 +206,58 @@ public class ProjectService {
         return responses;
     }
 
+    @Transactional
+    public SchemaResponse importSchemaWithEndpoints(String projectId, EndpointSelectionImportRequest req) {
+        IntegrationProject project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Project", projectId));
+
+        Direction dir = req.getDirection() != null ? req.getDirection() : Direction.TARGET_TO_SOURCE;
+        SystemDefinition system = systemRepository.findByProjectIdAndDirection(projectId, dir)
+                .orElseGet(() -> {
+                    String defaultName = dir == Direction.SOURCE_TO_TARGET ? "Source System" : "Target System";
+                    SystemDefinition newSys = SystemDefinition.builder()
+                            .project(project)
+                            .systemName(req.getSystemName() != null ? req.getSystemName() : defaultName)
+                            .systemType(SystemType.REST_API)
+                            .direction(dir)
+                            .schemaType(SchemaType.OPENAPI)
+                            .build();
+                    return systemRepository.save(newSys);
+                });
+
+        if (req.getSystemName() != null && !req.getSystemName().isBlank()) {
+            system.setSystemName(req.getSystemName());
+            systemRepository.save(system);
+        }
+
+        String hash = schemaExtractionService.computeSha256(req.getRawSpecContent());
+        int count = req.getSelectedEndpointPaths() != null ? req.getSelectedEndpointPaths().size() : 0;
+        String schemaName = (req.getSystemName() != null ? req.getSystemName() : "Spec") +
+                (count > 0 ? " (" + count + " APIs Selected)" : " (All APIs)");
+
+        SchemaDefinition schemaDef = SchemaDefinition.builder()
+                .systemDefinition(system)
+                .schemaName(schemaName)
+                .schemaVersion("1.0")
+                .schemaType(SchemaType.OPENAPI)
+                .originalSchema(req.getRawSpecContent())
+                .schemaHash(hash)
+                .status("ACTIVE")
+                .build();
+        schemaDef = schemaRepository.save(schemaDef);
+
+        List<FieldExtractionDto> fieldDtos = schemaExtractionService.extractFieldsForEndpoints(
+                req.getRawSpecContent(), req.getSelectedEndpointPaths());
+        List<SchemaField> fieldEntities = schemaExtractionService.convertToEntities(fieldDtos, schemaDef);
+        schemaDef.getFields().addAll(fieldEntities);
+        schemaDef = schemaRepository.save(schemaDef);
+
+        auditService.recordEvent("SchemaDefinition", schemaDef.getId(), "IMPORT_SELECTED_APIS", "system", null,
+                "Imported " + count + " selected APIs (" + fieldEntities.size() + " fields)");
+
+        return mapToSchemaResponse(schemaDef, system, fieldDtos);
+    }
+
     private ProjectResponse mapToResponse(IntegrationProject p) {
         List<SystemDefinition> systems = systemRepository.findByProjectId(p.getId());
         List<MappingDefinition> mappings = mappingDefinitionRepository.findByProjectId(p.getId());
@@ -217,6 +275,8 @@ public class ProjectService {
                 .createdBy(p.getCreatedBy())
                 .createdAt(p.getCreatedAt())
                 .updatedAt(p.getUpdatedAt())
+                .approverEmail(p.getApproverEmail())
+                .autoApproveEnabled(p.isAutoApproveEnabled())
                 .systemCount(systems.size())
                 .mappingVersionCount(mappings.size())
                 .latestPublishedVersion(latestPublished)

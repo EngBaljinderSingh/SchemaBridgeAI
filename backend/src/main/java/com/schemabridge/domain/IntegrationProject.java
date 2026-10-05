@@ -38,6 +38,14 @@ public class IntegrationProject {
     @Builder.Default
     private String createdBy = "system";
 
+    @Column(name = "approver_email", length = 150)
+    @Builder.Default
+    private String approverEmail = "approver@enterprise.com";
+
+    @Column(name = "auto_approve_enabled", nullable = false)
+    @Builder.Default
+    private boolean autoApproveEnabled = true;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();

@@ -126,4 +126,41 @@ class MatchingStrategiesTest {
         assertFalse(res.warnings().isEmpty());
         assertTrue(res.unmappedSourceFields().contains("custom_code_xyz"));
     }
+
+    @Test
+    @DisplayName("Exact Matching: Prioritizes full path match over leaf collision")
+    void testExactMatchingNamespacePrioritization() {
+        FieldExtractionDto srcOrder = FieldExtractionDto.builder().fieldPath("order.id").fieldName("id").dataType("string").build();
+        FieldExtractionDto srcUser = FieldExtractionDto.builder().fieldPath("user.id").fieldName("id").dataType("string").build();
+
+        // Targets in inverted order: user.id first, order.id second
+        FieldExtractionDto tgtUser = FieldExtractionDto.builder().fieldPath("user.id").fieldName("id").dataType("string").build();
+        FieldExtractionDto tgtOrder = FieldExtractionDto.builder().fieldPath("order.id").fieldName("id").dataType("string").build();
+
+        Set<String> mappedTargets = new HashSet<>();
+        List<MappingRuleDto> results = exactMatchStrategy.match(
+                List.of(srcOrder, srcUser), List.of(tgtUser, tgtOrder), mappedTargets, "proj-1");
+
+        assertEquals(2, results.size());
+        MappingRuleDto orderRule = results.stream().filter(r -> r.getSourcePaths().contains("order.id")).findFirst().orElseThrow();
+        assertEquals("order.id", orderRule.getTargetPath());
+
+        MappingRuleDto userRule = results.stream().filter(r -> r.getSourcePaths().contains("user.id")).findFirst().orElseThrow();
+        assertEquals("user.id", userRule.getTargetPath());
+    }
+
+    @Test
+    @DisplayName("Synonym Matching: Matches bidirectional nested leaves")
+    void testSynonymMatchingNestedLeaves() {
+        FieldExtractionDto src = FieldExtractionDto.builder().fieldPath("client.email").fieldName("email").dataType("string").build();
+        FieldExtractionDto tgt = FieldExtractionDto.builder().fieldPath("profile.emailAddress").fieldName("emailAddress").dataType("string").build();
+
+        Set<String> mappedTargets = new HashSet<>();
+        List<MappingRuleDto> results = synonymMatchStrategy.match(
+                List.of(src), List.of(tgt), mappedTargets, "proj-1");
+
+        assertEquals(1, results.size());
+        assertEquals("client.email", results.get(0).getSourcePaths().get(0));
+        assertEquals("profile.emailAddress", results.get(0).getTargetPath());
+    }
 }

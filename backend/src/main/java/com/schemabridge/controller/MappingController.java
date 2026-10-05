@@ -73,6 +73,33 @@ public class MappingController {
         return ResponseEntity.ok(mappingService.approveMapping(mappingId, approvedBy));
     }
 
+    @PostMapping("/{mappingId}/approve-all")
+    @Operation(summary = "Approve all rules and mark mapping approved")
+    public ResponseEntity<MappingDefinitionDto> approveAll(
+            @PathVariable String projectId,
+            @PathVariable String mappingId,
+            @RequestParam(required = false, defaultValue = "admin") String approvedBy) {
+        return ResponseEntity.ok(mappingService.approveMapping(mappingId, approvedBy));
+    }
+
+    @PostMapping("/{mappingId}/approve-all-high-confidence")
+    @Operation(summary = "Approve only high-confidence rules (confidence >= 90%)")
+    public ResponseEntity<MappingDefinitionDto> approveAllHighConfidence(
+            @PathVariable String projectId,
+            @PathVariable String mappingId,
+            @RequestParam(required = false, defaultValue = "admin") String approvedBy) {
+        return ResponseEntity.ok(mappingService.approveAllHighConfidence(mappingId, approvedBy));
+    }
+
+    @PostMapping("/{mappingId}/invert")
+    @Operation(summary = "Synthesize reverse mapping (target -> source) from this mapping version")
+    public ResponseEntity<MappingDefinitionDto> invertMapping(
+            @PathVariable String projectId,
+            @PathVariable String mappingId,
+            @RequestParam(required = false, defaultValue = "system (inverted)") String createdBy) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(mappingService.invertMapping(mappingId, createdBy));
+    }
+
     @PostMapping("/{mappingId}/publish")
     @Operation(summary = "Publish an approved mapping version for deterministic execution")
     public ResponseEntity<MappingDefinitionDto> publishMapping(

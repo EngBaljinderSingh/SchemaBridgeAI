@@ -42,4 +42,12 @@ public class AuditService {
     public List<AuditEvent> getAllEvents() {
         return auditEventRepository.findAllByOrderByCreatedAtDesc();
     }
+
+    @Transactional
+    public void notifyApprover(String approverEmail, String subject, String messageDetails) {
+        String recipient = (approverEmail != null && !approverEmail.isBlank()) ? approverEmail : "approver@enterprise.com";
+        recordEvent("NOTIFICATION", recipient, "EMAIL_DISPATCH", "system", null,
+                "Notification to " + recipient + " | Subject: " + subject + " | " + messageDetails);
+        log.info("DISPATCH NOTIFICATION EMAIL: To: {} | Subject: {} | Message: {}", recipient, subject, messageDetails);
+    }
 }

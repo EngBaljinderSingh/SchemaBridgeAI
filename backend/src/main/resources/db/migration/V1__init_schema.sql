@@ -6,6 +6,8 @@ CREATE TABLE IF NOT EXISTS integration_projects (
     description TEXT,
     status VARCHAR(50) NOT NULL DEFAULT 'DRAFT',
     created_by VARCHAR(100) DEFAULT 'system',
+    approver_email VARCHAR(150) DEFAULT 'approver@enterprise.com',
+    auto_approve_enabled BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

@@ -86,7 +86,7 @@
           </div>
           <div style="display: flex; gap: 8px;">
             <button class="btn btn-secondary btn-sm" (click)="selectProject(proj); activeTab = 'apis'" data-aid="btn-open-project">
-              Open &rarr;
+              Open
             </button>
             <button class="btn btn-sm" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);"
                     (click)="deleteProject(proj, $event)" [attr.data-aid]="'btn-delete-project-' + proj.id" title="Delete App">
@@ -174,19 +174,22 @@
 
   <!-- TAB 2: SETUP & SCHEMAS -->
   <div *ngIf="activeTab === 'setup'" class="animate-slide-up" data-aid="view-setup">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
       <div>
         <h2>Project Schemas &amp; Data Contract Setup</h2>
         <p style="color: var(--text-secondary); font-size: 0.875rem;">
           Active Project: <strong>{{ selectedProject?.name }}</strong>
         </p>
       </div>
-      <div style="display: flex; gap: 10px;">
+      <div style="display: flex; gap: 10px; flex-wrap: wrap;">
         <button class="btn btn-secondary" (click)="loadPromptSampleData()" [disabled]="isImportingSchemas" data-aid="btn-load-sample">
           {{ isImportingSchemas ? 'Extracting Schemas...' : 'Load User Profile Prompt Sample' }}
         </button>
+        <button class="btn btn-secondary" (click)="loadBothSwaggerSamples()" [disabled]="isImportingSchemas" style="border-color: rgba(52, 211, 153, 0.4); color: #34d399;" data-aid="btn-load-both-swaggers">
+          ⚡ Load Sample Swagger (System A &amp; B)
+        </button>
         <button class="btn btn-primary" (click)="proceedToMapping()" [disabled]="isImportingSchemas" data-aid="btn-proceed-to-mapping">
-          {{ isImportingSchemas ? 'Importing & Generating...' : 'Proceed to Mapping &rarr;' }}
+          {{ isImportingSchemas ? 'Importing & Generating...' : 'Proceed to Mapping' }}
         </button>
       </div>
     </div>
@@ -214,48 +217,191 @@
       <button class="btn btn-secondary btn-sm" (click)="setupErrorMessage = ''">Dismiss</button>
     </div>
 
-    <div class="dual-panel-grid">
-      <!-- Source Schema Panel -->
-      <div class="glass-card editor-card" data-aid="panel-source-schema">
-        <div class="panel-header">
-          <div>
-            <h3>Source Schema (System A)</h3>
-            <span style="font-size: 0.75rem; color: var(--text-muted);">Payload produced by upstream system</span>
+    <!-- Swagger/OpenAPI Auto-Mapping Banner -->
+    <div class="glass-card" style="margin-bottom: 20px; background: rgba(16, 185, 129, 0.08); border-color: rgba(16, 185, 129, 0.3); padding: 16px 20px;" data-aid="panel-swagger-automap">
+      <div style="display: flex; gap: 14px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 280px;">
+          <h4 style="color: #34d399; margin: 0 0 6px 0; font-size: 0.9375rem; display: flex; align-items: center; gap: 8px;">
+            <span>Auto-Map From Swagger / OpenAPI Specs</span>
+            <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399; font-size: 0.6875rem;">Demo Ready</span>
+          </h4>
+          <p style="color: var(--text-secondary); font-size: 0.8125rem; line-height: 1.5; margin: 0 0 10px 0;">
+            Seamlessly demo bi-directional integration between <strong>Host System (System A - Legacy Core POS)</strong> and <strong>Destination System (System B - Modern Cloud ERP)</strong>. Load the sample Swagger contracts with 1 click or upload files to extract fields and auto-map with Aviator AI.
+          </p>
+          <div *ngIf="uploadErrorMessage" style="color: #fca5a5; font-size: 0.8125rem; margin-bottom: 8px;">{{ uploadErrorMessage }}</div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px;">
+            <button class="btn btn-secondary btn-sm" (click)="downloadSwaggerFile('host')" title="Download Host System A Swagger JSON" style="font-size: 0.75rem;">
+              📥 Host Spec (.json)
+            </button>
+            <button class="btn btn-secondary btn-sm" (click)="downloadSwaggerFile('destination')" title="Download Destination System B Swagger JSON" style="font-size: 0.75rem;">
+              📥 Destination Spec (.json)
+            </button>
           </div>
-          <select [(ngModel)]="sourceSchemaType" style="width: 150px;" data-aid="select-source-type">
-            <option value="SAMPLE_JSON">Sample JSON</option>
-            <option value="JSON_SCHEMA">JSON Schema</option>
-            <option value="OPENAPI">OpenAPI 3.0</option>
-          </select>
         </div>
-        <textarea class="editor-box code-editor" [(ngModel)]="sourceSchemaInput" placeholder="Paste source JSON payload or schema..." data-aid="input-source-schema"></textarea>
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px;">
-          <span style="font-size: 0.75rem; color: var(--accent-secondary);">Extracted fields: {{ sourceFields.length }}</span>
-          <button class="btn btn-secondary btn-sm" (click)="importSource()" data-aid="btn-import-source">
-            Import &amp; Extract Fields
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+          <button class="btn btn-secondary btn-sm" (click)="loadBothSwaggerSamples()" [disabled]="isImportingSchemas" data-aid="btn-load-sample-swaggers">
+            ⚡ Load Both Swaggers
+          </button>
+          <button class="btn btn-primary btn-sm" (click)="loadBothSwaggersAndAutoMap()" [disabled]="isImportingSchemas" data-aid="btn-load-both-and-automap" style="background: linear-gradient(135deg, #059669, #10b981);">
+            🚀 Load &amp; Auto-Map Now
+          </button>
+          <button class="btn btn-secondary btn-sm" (click)="uploadBothAndAutoMap()"
+                  [disabled]="!sourceSchemaFile || !targetSchemaFile || isUploadingSourceFile || isUploadingTargetFile"
+                  data-aid="btn-upload-both-automap">
+            {{ (isUploadingSourceFile || isUploadingTargetFile) ? 'Uploading...' : 'Upload Files &amp; Auto-Map' }}
           </button>
         </div>
       </div>
+    </div>
 
-      <!-- Target Schema Panel -->
+    <div class="dual-panel-grid">
+      <!-- Source Schema Panel (Host System A) -->
+      <div class="glass-card editor-card" data-aid="panel-source-schema">
+        <div class="panel-header">
+          <div>
+            <h3>Source Schema (Host System A)</h3>
+            <span style="font-size: 0.75rem; color: var(--text-muted);">{{ selectedProject?.sourceSystemName || 'System A' }} specification</span>
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <button *ngIf="sourceInputMode === 'SWAGGER'" class="btn btn-secondary btn-sm" (click)="loadHostSwaggerSample()" [disabled]="isImportingSchemas" style="font-size: 0.75rem; border-color: rgba(52, 211, 153, 0.4); color: #34d399;" data-aid="btn-load-host-swagger">
+              ⚡ Load Host Swagger
+            </button>
+            <select *ngIf="sourceInputMode === 'SWAGGER'" [(ngModel)]="sourceSchemaType" style="width: 140px;" data-aid="select-source-type">
+              <option value="SAMPLE_JSON">Sample JSON</option>
+              <option value="JSON_SCHEMA">JSON Schema</option>
+              <option value="OPENAPI">OpenAPI 3.0</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Mode Toggle Pill & Endpoint Picker Trigger -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <div class="mode-toggle">
+            <button class="mode-toggle-btn" [class.active]="sourceInputMode === 'SWAGGER'" (click)="sourceInputMode = 'SWAGGER'">
+              📜 OpenAPI / Swagger
+            </button>
+            <button class="mode-toggle-btn" [class.active]="sourceInputMode === 'TRACE'" (click)="sourceInputMode = 'TRACE'">
+              ⚡ Live Trace (NO Swagger)
+            </button>
+          </div>
+          <button *ngIf="sourceInputMode === 'SWAGGER'" class="btn btn-secondary btn-sm" (click)="openEndpointPicker('SOURCE_TO_TARGET')"
+                  [disabled]="isParsingEndpoints" title="Select specific endpoints if specification contains multiple or 100+ APIs"
+                  style="border-color: rgba(99, 102, 241, 0.4); color: #a5b4fc; font-size: 0.75rem;">
+            🔍 Pick Endpoints (100 APIs)
+          </button>
+        </div>
+
+        <!-- SWAGGER MODE CONTENT -->
+        <div *ngIf="sourceInputMode === 'SWAGGER'" style="display: flex; flex-direction: column; flex: 1;">
+          <textarea class="editor-box code-editor" [(ngModel)]="sourceSchemaInput" placeholder="Paste source JSON payload or Swagger/OpenAPI spec..." data-aid="input-source-schema"></textarea>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px;">
+            <span style="font-size: 0.75rem; color: var(--accent-secondary);">Extracted fields: {{ sourceFields.length }}</span>
+            <button class="btn btn-secondary btn-sm" (click)="importSource()" data-aid="btn-import-source">
+              Import &amp; Extract Fields
+            </button>
+          </div>
+          <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-color, rgba(255,255,255,0.08)); display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <span style="font-size: 0.75rem; color: var(--text-muted);">Upload (.json/.yaml):</span>
+              <input type="file" accept=".json,.yaml,.yml" (change)="onSourceFileSelected($event)" data-aid="input-source-file" />
+              <button class="btn btn-secondary btn-sm" (click)="uploadSourceSchemaFile()" [disabled]="!sourceSchemaFile || isUploadingSourceFile" data-aid="btn-upload-source-file">
+                {{ isUploadingSourceFile ? 'Uploading...' : 'Upload File' }}
+              </button>
+            </div>
+            <button class="btn btn-secondary btn-sm" (click)="downloadSwaggerFile('host')" title="Download Host Swagger Spec" style="font-size: 0.75rem;">
+              📥 Download Sample Spec
+            </button>
+          </div>
+        </div>
+
+        <!-- LIVE TRACE MODE CONTENT (NO SWAGGER) -->
+        <div *ngIf="sourceInputMode === 'TRACE'" style="display: flex; flex-direction: column; flex: 1;">
+          <div style="font-size: 0.8125rem; color: var(--text-secondary); line-height: 1.4; margin-bottom: 8px; background: rgba(0,0,0,0.25); padding: 10px; border-radius: 6px; border: 1px dashed rgba(255,255,255,0.1);">
+            💡 <strong>Asymmetric Support:</strong> If System A has NO Swagger/OpenAPI docs, paste a live HTTP request/response JSON payload or cURL body. SchemaBridge AI will automatically trace types and reconstruct the schema.
+          </div>
+          <textarea class="editor-box code-editor" [(ngModel)]="sourceTracePayload" placeholder="Paste live sample JSON payload..." style="height: 320px;"></textarea>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px;">
+            <span style="font-size: 0.75rem; color: var(--accent-secondary);">Extracted fields: {{ sourceFields.length }}</span>
+            <button class="btn btn-primary btn-sm" (click)="traceSourcePayload()" [disabled]="isTracingSource || !sourceTracePayload.trim()">
+              <span *ngIf="isTracingSource" class="spinner" style="width: 12px; height: 12px; margin-right: 4px;"></span>
+              {{ isTracingSource ? 'Tracing...' : '⚡ Trace Payload &amp; Infer Schema' }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Target Schema Panel (Destination System B) -->
       <div class="glass-card editor-card" data-aid="panel-target-schema">
         <div class="panel-header">
           <div>
-            <h3>Target Schema (System B)</h3>
-            <span style="font-size: 0.75rem; color: var(--text-muted);">Specification required by downstream system</span>
+            <h3>Target Schema (Destination System B)</h3>
+            <span style="font-size: 0.75rem; color: var(--text-muted);">{{ selectedProject?.targetSystemName || 'System B' }} specification</span>
           </div>
-          <select [(ngModel)]="targetSchemaType" style="width: 150px;" data-aid="select-target-type">
-            <option value="SAMPLE_JSON">Sample JSON / Contract</option>
-            <option value="JSON_SCHEMA">JSON Schema</option>
-            <option value="OPENAPI">OpenAPI 3.0</option>
-          </select>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <button *ngIf="targetInputMode === 'SWAGGER'" class="btn btn-secondary btn-sm" (click)="loadDestinationSwaggerSample()" [disabled]="isImportingSchemas" style="font-size: 0.75rem; border-color: rgba(52, 211, 153, 0.4); color: #34d399;" data-aid="btn-load-destination-swagger">
+              ⚡ Load Destination Swagger
+            </button>
+            <select *ngIf="targetInputMode === 'SWAGGER'" [(ngModel)]="targetSchemaType" style="width: 140px;" data-aid="select-target-type">
+              <option value="SAMPLE_JSON">Sample JSON / Contract</option>
+              <option value="JSON_SCHEMA">JSON Schema</option>
+              <option value="OPENAPI">OpenAPI 3.0</option>
+            </select>
+          </div>
         </div>
-        <textarea class="editor-box code-editor" [(ngModel)]="targetSchemaInput" placeholder="Paste target schema or JSON contract..." data-aid="input-target-schema"></textarea>
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px;">
-          <span style="font-size: 0.75rem; color: var(--accent-secondary);">Target fields: {{ targetFields.length }}</span>
-          <button class="btn btn-secondary btn-sm" (click)="importTarget()" data-aid="btn-import-target">
-            Import &amp; Extract Fields
+
+        <!-- Mode Toggle Pill & Endpoint Picker Trigger -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <div class="mode-toggle">
+            <button class="mode-toggle-btn" [class.active]="targetInputMode === 'SWAGGER'" (click)="targetInputMode = 'SWAGGER'">
+              📜 OpenAPI / Swagger
+            </button>
+            <button class="mode-toggle-btn" [class.active]="targetInputMode === 'TRACE'" (click)="targetInputMode = 'TRACE'">
+              ⚡ Live Trace (NO Swagger)
+            </button>
+          </div>
+          <button *ngIf="targetInputMode === 'SWAGGER'" class="btn btn-secondary btn-sm" (click)="openEndpointPicker('TARGET_TO_SOURCE')"
+                  [disabled]="isParsingEndpoints" title="Select specific endpoints if specification contains multiple or 100+ APIs"
+                  style="border-color: rgba(99, 102, 241, 0.4); color: #a5b4fc; font-size: 0.75rem;">
+            🔍 Pick Endpoints (100 APIs)
           </button>
+        </div>
+
+        <!-- SWAGGER MODE CONTENT -->
+        <div *ngIf="targetInputMode === 'SWAGGER'" style="display: flex; flex-direction: column; flex: 1;">
+          <textarea class="editor-box code-editor" [(ngModel)]="targetSchemaInput" placeholder="Paste target schema or Swagger/OpenAPI spec..." data-aid="input-target-schema"></textarea>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px;">
+            <span style="font-size: 0.75rem; color: var(--accent-secondary);">Target fields: {{ targetFields.length }}</span>
+            <button class="btn btn-secondary btn-sm" (click)="importTarget()" data-aid="btn-import-target">
+              Import &amp; Extract Fields
+            </button>
+          </div>
+          <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-color, rgba(255,255,255,0.08)); display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <span style="font-size: 0.75rem; color: var(--text-muted);">Upload (.json/.yaml):</span>
+              <input type="file" accept=".json,.yaml,.yml" (change)="onTargetFileSelected($event)" data-aid="input-target-file" />
+              <button class="btn btn-secondary btn-sm" (click)="uploadTargetSchemaFile()" [disabled]="!targetSchemaFile || isUploadingTargetFile" data-aid="btn-upload-target-file">
+                {{ isUploadingTargetFile ? 'Uploading...' : 'Upload File' }}
+              </button>
+            </div>
+            <button class="btn btn-secondary btn-sm" (click)="downloadSwaggerFile('destination')" title="Download Destination Swagger Spec" style="font-size: 0.75rem;">
+              📥 Download Sample Spec
+            </button>
+          </div>
+        </div>
+
+        <!-- LIVE TRACE MODE CONTENT (NO SWAGGER) -->
+        <div *ngIf="targetInputMode === 'TRACE'" style="display: flex; flex-direction: column; flex: 1;">
+          <div style="font-size: 0.8125rem; color: var(--text-secondary); line-height: 1.4; margin-bottom: 8px; background: rgba(0,0,0,0.25); padding: 10px; border-radius: 6px; border: 1px dashed rgba(255,255,255,0.1);">
+            💡 <strong>Asymmetric Support:</strong> If System B has NO Swagger/OpenAPI docs, paste a live HTTP request/response JSON payload or cURL body. SchemaBridge AI will automatically trace types and reconstruct the schema.
+          </div>
+          <textarea class="editor-box code-editor" [(ngModel)]="targetTracePayload" placeholder="Paste live sample JSON payload..." style="height: 320px;"></textarea>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px;">
+            <span style="font-size: 0.75rem; color: var(--accent-secondary);">Target fields: {{ targetFields.length }}</span>
+            <button class="btn btn-primary btn-sm" (click)="traceTargetPayload()" [disabled]="isTracingTarget || !targetTracePayload.trim()">
+              <span *ngIf="isTracingTarget" class="spinner" style="width: 12px; height: 12px; margin-right: 4px;"></span>
+              {{ isTracingTarget ? 'Tracing...' : '⚡ Trace Payload &amp; Infer Schema' }}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -270,6 +416,32 @@
         <p style="color: var(--text-secondary); font-size: 0.8125rem;">This project needs source and target schemas imported before mapping rules can be generated.</p>
       </div>
       <button class="btn btn-primary btn-sm" (click)="activeTab = 'setup'">Go to Setup &amp; Schemas &rarr;</button>
+    </div>
+
+    <!-- Governance & Approval Policy Banner -->
+    <div class="governance-banner" [class.manual-review]="!selectedProject?.autoApproveEnabled" data-aid="governance-banner">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <span style="font-size: 1.35rem;">{{ selectedProject?.autoApproveEnabled ? '🛡️' : '⚖️' }}</span>
+        <div>
+          <div style="font-size: 0.875rem; font-weight: 700; color: var(--text-primary);">
+            {{ selectedProject?.autoApproveEnabled ? 'Automated Governance Policy Active' : 'Manual Governance & Sign-off Policy' }}
+          </div>
+          <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 2px;">
+            <span *ngIf="selectedProject?.autoApproveEnabled">
+              Safe rules (&ge;90% confidence) are auto-approved. Ambiguous rules (&lt;90%) are held for review.
+            </span>
+            <span *ngIf="!selectedProject?.autoApproveEnabled">
+              Auto-approve disabled. All rules require human sign-off before publication.
+            </span>
+            <span *ngIf="selectedProject?.approverEmail" style="margin-left: 10px; color: #93c5fd; background: rgba(59, 130, 246, 0.15); padding: 2px 6px; border-radius: 4px;">
+              Approver: <strong>{{ selectedProject?.approverEmail }}</strong>
+            </span>
+          </div>
+        </div>
+      </div>
+      <div *ngIf="approvalSuccessMessage" style="color: #34d399; font-size: 0.8125rem; font-weight: 600; background: rgba(16, 185, 129, 0.15); padding: 4px 10px; border-radius: 4px; border: 1px solid rgba(16, 185, 129, 0.3);">
+        ✓ {{ approvalSuccessMessage }}
+      </div>
     </div>
 
     <!-- Natural Language Instruction Box -->
@@ -297,23 +469,33 @@
             All ({{ activeMapping?.rules?.length || 0 }})
           </button>
           <button class="filter-btn" [class.active]="ruleFilter === 'REVIEW'" (click)="ruleFilter = 'REVIEW'" data-aid="filter-review">
-            Review Required
+            Review Required ({{ (activeMapping?.rules || []).filter(r => r.requiresReview).length }})
           </button>
         </div>
       </div>
 
-      <div style="display: flex; gap: 10px;">
+      <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
         <button class="btn btn-primary btn-sm" (click)="openCustomRuleModal()" data-aid="btn-open-custom-rule">
           + Add Custom Rule
         </button>
         <button class="btn btn-secondary btn-sm" (click)="generateMappings()" data-aid="btn-generate-mappings">
-          Generate 5-Level Suggestions
+          ⚡ 5-Level Match
+        </button>
+        <button class="btn btn-secondary btn-sm" (click)="approveAllHighConfidence()" [disabled]="isApprovingHighConfidence"
+                title="1-Click Approve all high-confidence rules (&ge;90%)"
+                style="border-color: rgba(52, 211, 153, 0.4); color: #34d399;" data-aid="btn-approve-high-confidence">
+          {{ isApprovingHighConfidence ? 'Approving...' : '✓ Approve High-Confidence (&ge;90%)' }}
+        </button>
+        <button class="btn btn-secondary btn-sm" (click)="approveAllMappings()" [disabled]="isApprovingAll"
+                title="Approve all rules in mapping" data-aid="btn-approve-all">
+          {{ isApprovingAll ? 'Approving...' : '✓ Approve All' }}
+        </button>
+        <button class="btn btn-secondary btn-sm" (click)="invertCurrentMapping()" [disabled]="isInvertingMapping"
+                title="Automatically create inverse bidirectional mapping reversing Target -> Source" data-aid="btn-invert-mapping">
+          {{ isInvertingMapping ? 'Inverting...' : '⇄ Invert Mapping' }}
         </button>
         <button class="btn btn-secondary btn-sm" (click)="cloneMapping()" data-aid="btn-clone-mapping">
-          Clone Version
-        </button>
-        <button class="btn btn-secondary btn-sm" (click)="approveMapping()" data-aid="btn-approve-mapping">
-          Approve All
+          Clone
         </button>
         <button class="btn btn-success btn-sm" (click)="publishMapping()" data-aid="btn-publish-mapping">
           Publish v{{ activeMapping?.version }}
@@ -354,7 +536,7 @@
             <div class="rule-header">
               <div class="rule-connection">
                 <span class="source-tag">{{ rule.sourcePaths.join(' + ') }}</span>
-                <span class="arrow-icon">&rarr;</span>
+                <span class="arrow-icon">-></span>
                 <span class="target-tag">{{ rule.targetPath }}</span>
               </div>
 
@@ -552,6 +734,19 @@
           <label style="font-size: 0.75rem; color: var(--text-secondary);">Target System Name</label>
           <input type="text" [(ngModel)]="newProjectTargetSystem" data-aid="input-target-system" />
         </div>
+      </div>
+      <div>
+        <label style="font-size: 0.75rem; color: var(--text-secondary);">Governance Approver Email</label>
+        <input type="email" [(ngModel)]="newProjectApproverEmail" placeholder="approver@enterprise.com" data-aid="input-approver-email" />
+        <span style="font-size: 0.7rem; color: var(--text-muted); display: block; margin-top: 2px;">
+          Alerted via email when mappings require manual review or approval.
+        </span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px; margin-top: 2px;">
+        <input type="checkbox" id="modalAutoApproveToggle" [(ngModel)]="newProjectAutoApprove" data-aid="toggle-auto-approve" style="width: auto; cursor: pointer;" />
+        <label for="modalAutoApproveToggle" style="font-size: 0.8125rem; cursor: pointer; color: var(--text-secondary);">
+          Enable Auto-Approve for Safe / High-Confidence Matches (&ge;90%)
+        </label>
       </div>
     </div>
     <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
@@ -898,3 +1093,83 @@
     </div>
   </div>
 </div>
+
+<!-- MODAL: SELECTIVE 100 APIS ENDPOINT PICKER -->
+<div *ngIf="showEndpointPickerModal" class="modal-backdrop" data-aid="modal-endpoint-picker">
+  <div class="modal-content animate-slide-up" style="max-width: 880px; max-height: 88vh; display: flex; flex-direction: column;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px;">
+      <div>
+        <h3 style="margin: 0 0 4px 0;">Select API Endpoints for Integration</h3>
+        <p style="font-size: 0.8125rem; color: var(--text-secondary); margin: 0;">
+          Specification contains <strong>{{ parsedEndpoints.length }}</strong> endpoints. Pick the specific APIs you wish to map, or select all for bulk integration.
+        </p>
+      </div>
+      <button class="btn btn-secondary btn-sm" (click)="showEndpointPickerModal = false">✕</button>
+    </div>
+
+    <!-- Search & Bulk Filter Controls -->
+    <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px;">
+      <input type="text" [(ngModel)]="endpointSearchQuery" placeholder="Filter by endpoint path, method, tag (e.g. /customers or GET)..." style="flex: 1;" />
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <span style="font-size: 0.75rem; color: var(--text-muted);">
+          Selected: <strong style="color: #60a5fa;">{{ getSelectedEndpointsCount() }}</strong> / {{ parsedEndpoints.length }}
+        </span>
+      </div>
+    </div>
+
+    <!-- Endpoints Checklist Table -->
+    <div class="endpoint-picker-table-wrapper" style="flex: 1;">
+      <table class="endpoint-table">
+        <thead>
+          <tr>
+            <th style="width: 40px; text-align: center;">
+              <input type="checkbox" [checked]="areAllEndpointsSelected()" (change)="toggleSelectAllEndpoints($event)" title="Select / Deselect All" style="cursor: pointer;" />
+            </th>
+            <th style="width: 80px;">Method</th>
+            <th>Endpoint Path</th>
+            <th>Summary / Description</th>
+            <th style="width: 110px;">Tag</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let ep of getFilteredEndpoints()" (click)="ep.selected = !ep.selected" style="cursor: pointer;">
+            <td style="text-align: center;" (click)="$event.stopPropagation()">
+              <input type="checkbox" [(ngModel)]="ep.selected" style="cursor: pointer;" />
+            </td>
+            <td>
+              <span class="method-badge" [class.method-get]="ep.httpMethod === 'GET'"
+                    [class.method-post]="ep.httpMethod === 'POST'"
+                    [class.method-put]="ep.httpMethod === 'PUT'"
+                    [class.method-delete]="ep.httpMethod === 'DELETE'"
+                    [class.method-patch]="ep.httpMethod === 'PATCH'">
+                {{ ep.httpMethod }}
+              </span>
+            </td>
+            <td style="font-family: var(--font-mono); font-weight: 600; color: #93c5fd;">{{ ep.path }}</td>
+            <td style="color: var(--text-secondary);">{{ ep.summary || 'No summary' }}</td>
+            <td><span class="badge" style="background: rgba(255,255,255,0.06); font-size: 0.7rem;">{{ ep.tag || 'default' }}</span></td>
+          </tr>
+          <tr *ngIf="getFilteredEndpoints().length === 0">
+            <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 24px;">
+              No endpoints matching "{{ endpointSearchQuery }}"
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 18px; border-top: 1px solid var(--border-subtle); padding-top: 14px;">
+      <div style="font-size: 0.8125rem; color: var(--text-muted);">
+        Direction: <strong>{{ endpointPickerDirection === 'SOURCE_TO_TARGET' ? 'Source System A' : 'Target System B' }}</strong>
+      </div>
+      <div style="display: flex; gap: 10px;">
+        <button class="btn btn-secondary" (click)="showEndpointPickerModal = false">Cancel</button>
+        <button class="btn btn-primary" (click)="confirmEndpointSelection()" [disabled]="isImportingSelectedEndpoints || getSelectedEndpointsCount() === 0">
+          <span *ngIf="isImportingSelectedEndpoints" class="spinner" style="width: 14px; height: 14px; margin-right: 6px;"></span>
+          {{ isImportingSelectedEndpoints ? 'Importing Schemas...' : 'Import Selected (' + getSelectedEndpointsCount() + ') Endpoints' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+

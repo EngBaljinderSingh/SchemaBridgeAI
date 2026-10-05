@@ -6,9 +6,37 @@ export interface Project {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+  approverEmail?: string;
+  autoApproveEnabled?: boolean;
+  sourceSystemName?: string;
+  targetSystemName?: string;
   systemCount: number;
   mappingVersionCount: number;
   latestPublishedVersion?: number;
+}
+
+export interface ApiEndpointSummary {
+  httpMethod: string;
+  endpointPath: string;
+  summary: string;
+  operationId: string;
+  schemaModelName: string;
+  description: string;
+  selected?: boolean;
+}
+
+export interface TracePayloadRequest {
+  direction: 'SOURCE_TO_TARGET' | 'TARGET_TO_SOURCE';
+  systemName: string;
+  endpointPath?: string;
+  payload: string;
+}
+
+export interface EndpointSelectionImportRequest {
+  direction: 'SOURCE_TO_TARGET' | 'TARGET_TO_SOURCE';
+  systemName: string;
+  rawSpecContent: string;
+  selectedEndpointPaths: string[];
 }
 
 export interface FieldExtraction {

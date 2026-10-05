@@ -159,14 +159,24 @@ public class AviatorClient {
 
         sb.append("\nSOURCE FIELDS:\n");
         for (FieldExtractionDto sf : sourceFields) {
-            sb.append(String.format("- path: '%s', type: '%s', desc: '%s'\n",
-                    sf.getFieldPath(), sf.getDataType(), sf.getDescription() != null ? sf.getDescription() : ""));
+            String formatStr = sf.getFormat() != null ? String.format(", format: '%s'", sf.getFormat()) : "";
+            String descStr = sf.getDescription() != null ? String.format(", desc: '%s'", sf.getDescription()) : "";
+            String sampleStr = sf.getSampleValue() != null ? String.format(", sample: '%s'", sf.getSampleValue()) : "";
+            String enumStr = (sf.getEnumValues() != null && !sf.getEnumValues().isEmpty())
+                    ? String.format(", enum: %s", sf.getEnumValues()) : "";
+            sb.append(String.format("- path: '%s', type: '%s'%s%s%s%s\n",
+                    sf.getFieldPath(), sf.getDataType(), formatStr, descStr, sampleStr, enumStr));
         }
 
         sb.append("\nTARGET FIELDS:\n");
         for (FieldExtractionDto tf : targetFields) {
-            sb.append(String.format("- path: '%s', type: '%s', format: '%s', desc: '%s'\n",
-                    tf.getFieldPath(), tf.getDataType(), tf.getFormat() != null ? tf.getFormat() : "", tf.getDescription() != null ? tf.getDescription() : ""));
+            String formatStr = tf.getFormat() != null ? String.format(", format: '%s'", tf.getFormat()) : "";
+            String descStr = tf.getDescription() != null ? String.format(", desc: '%s'", tf.getDescription()) : "";
+            String sampleStr = tf.getSampleValue() != null ? String.format(", sample: '%s'", tf.getSampleValue()) : "";
+            String enumStr = (tf.getEnumValues() != null && !tf.getEnumValues().isEmpty())
+                    ? String.format(", enum: %s", tf.getEnumValues()) : "";
+            sb.append(String.format("- path: '%s', type: '%s'%s%s%s%s\n",
+                    tf.getFieldPath(), tf.getDataType(), formatStr, descStr, sampleStr, enumStr));
         }
 
         sb.append("\nStrictly return ONLY JSON in this format:\n");
@@ -322,7 +332,25 @@ public class AviatorClient {
                         || (sfName.contains("dob") && (tfName.contains("birth") || tfName.contains("dateofbirth")))
                         || (sfName.contains("active") && (tfName.contains("enabled") || tfName.contains("accountenabled")))
                         || (sfPath.contains("email") && tfPath.contains("email"))
-                        || (sfName.contains("project") && tfName.contains("project"));
+                        || (sfName.contains("project") && tfName.contains("project"))
+                        || ((sfName.contains("book") || sfPath.contains("book")) && (tfName.contains("sheet") || tfPath.contains("sheet")))
+                        || ((sfName.contains("author") || sfPath.contains("author")) && (tfName.contains("writer") || tfName.contains("creator")))
+                        || ((sfName.contains("cust") || sfPath.contains("cust")) && (tfName.contains("client") || tfName.contains("account")))
+                        || ((sfName.contains("order") || sfPath.contains("order")) && tfName.contains("order"))
+                        || ((sfName.contains("phone") || sfPath.contains("phone")) && (tfName.contains("tel") || tfName.contains("mobile")));
+
+                // Description and Title correlation fallback
+                if (!isSemanticMatch && sf.getDescription() != null && tf.getDescription() != null) {
+                    String sfDesc = sf.getDescription().toLowerCase();
+                    String tfDesc = tf.getDescription().toLowerCase();
+                    if ((sfDesc.contains("book") && tfDesc.contains("sheet")) ||
+                        (sfDesc.contains("title") && tfDesc.contains("title")) ||
+                        (sfDesc.contains("author") && (tfDesc.contains("author") || tfDesc.contains("writer") || tfDesc.contains("creator"))) ||
+                        (sfDesc.contains("order") && tfDesc.contains("order")) ||
+                        (sfDesc.contains("customer") && tfDesc.contains("customer"))) {
+                        isSemanticMatch = true;
+                    }
+                }
 
                 if (isSemanticMatch) {
                     TransformationOpType op = TransformationOpType.RENAME;

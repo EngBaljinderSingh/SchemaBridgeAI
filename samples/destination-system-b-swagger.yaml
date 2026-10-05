@@ -1,0 +1,82 @@
+openapi: 3.0.3
+info:
+  title: System B - Modern Cloud ERP & CRM API
+  version: 2.0.0
+  description: Destination Cloud ERP & Salesforce Integration API. Uses camelCase naming conventions, ISO-8601 YYYY-MM-DD dates, native booleans, and 3-letter tier codes.
+servers:
+  - url: https://api.clouderp.enterprise.com/v2
+    description: Cloud ERP Production Ingestion Gateway
+paths:
+  /erp/orders:
+    post:
+      summary: Ingest Enterprise Order Record
+      description: Ingests customer order transaction into Cloud ERP system of record
+      operationId: createCloudOrder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CloudErpOrderRecord'
+      responses:
+        '201':
+          description: Created order in Cloud ERP
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CloudErpOrderRecord'
+components:
+  schemas:
+    CloudErpOrderRecord:
+      type: object
+      required:
+        - orderId
+        - customerId
+        - userName
+        - totalAmount
+      properties:
+        orderId:
+          type: string
+          description: Canonical enterprise order sequence identifier
+          example: ORD-2026-991
+        customerId:
+          type: string
+          description: Unified master customer identifier in Cloud ERP
+          example: CUST-4081
+        userName:
+          type: string
+          description: Customer display username / full name
+          example: Dr. Sarah Connor
+        dateOfBirth:
+          type: string
+          format: yyyy-MM-dd
+          description: Date of birth in standard ISO-8601 format (YYYY-MM-DD)
+          example: 1988-08-15
+        accountEnabled:
+          type: boolean
+          description: Active status boolean flag
+          example: true
+        membershipLevel:
+          type: string
+          enum:
+            - STD
+            - SLV
+            - GLD
+            - PLT
+          description: Consolidated 3-letter customer tier membership code
+          example: GLD
+        emailAddress:
+          type: string
+          format: email
+          description: Verified customer direct email address
+          example: sarah.c@cyberdyne.org
+        telephone:
+          type: string
+          format: phone
+          description: Customer direct telephone contact number
+          example: +1-555-0199
+        totalAmount:
+          type: number
+          format: double
+          description: Final ledger total transaction monetary amount in USD
+          example: 499.99

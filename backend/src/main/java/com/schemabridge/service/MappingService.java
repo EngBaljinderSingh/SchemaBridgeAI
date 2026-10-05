@@ -6,6 +6,7 @@ import com.schemabridge.domain.*;
 import com.schemabridge.domain.enums.ConfidenceLevel;
 import com.schemabridge.domain.enums.Direction;
 import com.schemabridge.domain.enums.MappingStatus;
+import com.schemabridge.domain.enums.TransformationOpType;
 import com.schemabridge.dto.*;
 import com.schemabridge.exception.ResourceNotFoundException;
 import com.schemabridge.exception.ValidationException;
@@ -92,19 +93,44 @@ public class MappingService {
         List<MappingDefinition> existing = mappingDefinitionRepository.findByProjectIdOrderByVersionDesc(projectId);
         int nextVersion = existing.isEmpty() ? 1 : existing.get(0).getVersion() + 1;
 
+        boolean autoApprove = project.isAutoApproveEnabled();
+        boolean hasAmbiguities = pipelineResult.rules().stream()
+                .anyMatch(r -> r.getConfidence() == null || r.getConfidence().doubleValue() < 0.90 || r.isRequiresReview())
+                || !pipelineResult.unmappedSourceFields().isEmpty()
+                || !pipelineResult.unmappedTargetFields().isEmpty();
+
+        MappingStatus initialStatus;
+        if (autoApprove && !hasAmbiguities) {
+            initialStatus = MappingStatus.APPROVED;
+        } else if (!autoApprove) {
+            initialStatus = MappingStatus.REVIEW_REQUIRED;
+        } else {
+            initialStatus = MappingStatus.REVIEW_REQUIRED;
+        }
+
         MappingDefinition mappingDef = MappingDefinition.builder()
                 .project(project)
                 .direction(dir)
                 .version(nextVersion)
                 .sourceSchemaId(srcSchema.getId())
                 .targetSchemaId(tgtSchema.getId())
-                .status(MappingStatus.SUGGESTED)
+                .status(initialStatus)
                 .createdBy("system")
+                .approvedBy(initialStatus == MappingStatus.APPROVED ? "system (auto-approved)" : null)
+                .approvedAt(initialStatus == MappingStatus.APPROVED ? LocalDateTime.now() : null)
                 .build();
         mappingDef = mappingDefinitionRepository.save(mappingDef);
 
         List<MappingRule> ruleEntities = new ArrayList<>();
         for (MappingRuleDto dto : pipelineResult.rules()) {
+            boolean isHigh = dto.getConfidence() != null && dto.getConfidence().doubleValue() >= 0.90 && !dto.isRequiresReview();
+            MappingStatus ruleStatus;
+            if (autoApprove && isHigh) {
+                ruleStatus = MappingStatus.APPROVED;
+            } else {
+                ruleStatus = MappingStatus.SUGGESTED;
+            }
+
             MappingRule rule = MappingRule.builder()
                     .mappingDefinition(mappingDef)
                     .sourcePaths(writeJson(dto.getSourcePaths()))
@@ -113,7 +139,7 @@ public class MappingService {
                     .parametersJson(writeJson(dto.getParameters()))
                     .matchMethod(dto.getMatchMethod())
                     .confidence(dto.getConfidence())
-                    .status(dto.getStatus() != null ? dto.getStatus() : MappingStatus.SUGGESTED)
+                    .status(ruleStatus)
                     .explanation(dto.getExplanation())
                     .build();
             ruleEntities.add(rule);
@@ -121,8 +147,15 @@ public class MappingService {
         mappingDef.getRules().addAll(ruleEntities);
         mappingDef = mappingDefinitionRepository.save(mappingDef);
 
-        auditService.recordEvent("MappingDefinition", mappingDef.getId(), "GENERATE_SUGGESTIONS", "system", null,
-                "Generated " + ruleEntities.size() + " mapping rules for v" + nextVersion);
+        if (initialStatus == MappingStatus.APPROVED) {
+            auditService.recordEvent("MappingDefinition", mappingDef.getId(), "AUTO_APPROVE", "system", null,
+                    "Auto-approved all " + ruleEntities.size() + " rules under project policy for v" + nextVersion);
+        } else {
+            String reason = !autoApprove ? "Project policy requires manual approval" : "Ambiguities detected in mapping";
+            auditService.notifyApprover(project.getApproverEmail(),
+                    "Mapping Review Required: " + project.getName() + " v" + nextVersion,
+                    reason + ". " + ruleEntities.size() + " rules generated, manual review requested.");
+        }
 
         return mapToMappingDto(mappingDef, pipelineResult.unmappedSourceFields(), pipelineResult.unmappedTargetFields(), pipelineResult.warnings());
     }
@@ -265,6 +298,131 @@ public class MappingService {
                 "Approved mapping version v" + mapping.getVersion());
 
         return mapToMappingDto(mapping, List.of(), List.of(), List.of());
+    }
+
+    @Transactional
+    public MappingDefinitionDto approveAllHighConfidence(String mappingId, String approvedBy) {
+        MappingDefinition mapping = mappingDefinitionRepository.findById(mappingId)
+                .orElseThrow(() -> new ResourceNotFoundException("MappingDefinition", mappingId));
+
+        int approvedCount = 0;
+        for (MappingRule r : mapping.getRules()) {
+            if (r.getConfidence() != null && r.getConfidence().doubleValue() >= 0.90) {
+                r.setStatus(MappingStatus.APPROVED);
+                approvedCount++;
+            }
+        }
+        mappingRuleRepository.saveAll(mapping.getRules());
+
+        boolean allApproved = mapping.getRules().stream().allMatch(r -> r.getStatus() == MappingStatus.APPROVED);
+        if (allApproved) {
+            mapping.setStatus(MappingStatus.APPROVED);
+            mapping.setApprovedBy(approvedBy != null ? approvedBy : "admin");
+            mapping.setApprovedAt(LocalDateTime.now());
+            mappingDefinitionRepository.save(mapping);
+        }
+
+        auditService.recordEvent("MappingDefinition", mappingId, "APPROVE_HIGH_CONFIDENCE", approvedBy, null,
+                "Approved " + approvedCount + " high-confidence rules in v" + mapping.getVersion());
+
+        return mapToMappingDto(mapping, List.of(), List.of(), List.of());
+    }
+
+    @Transactional
+    public MappingDefinitionDto invertMapping(String mappingId, String createdBy) {
+        MappingDefinition forward = mappingDefinitionRepository.findById(mappingId)
+                .orElseThrow(() -> new ResourceNotFoundException("MappingDefinition", mappingId));
+
+        Direction reverseDir = forward.getDirection() == Direction.SOURCE_TO_TARGET ?
+                Direction.TARGET_TO_SOURCE : Direction.SOURCE_TO_TARGET;
+
+        List<MappingDefinition> existing = mappingDefinitionRepository.findByProjectIdOrderByVersionDesc(forward.getProject().getId());
+        int nextVersion = existing.isEmpty() ? 1 : existing.get(0).getVersion() + 1;
+
+        MappingDefinition reverse = MappingDefinition.builder()
+                .project(forward.getProject())
+                .direction(reverseDir)
+                .version(nextVersion)
+                .sourceSchemaId(forward.getTargetSchemaId())
+                .targetSchemaId(forward.getSourceSchemaId())
+                .status(MappingStatus.SUGGESTED)
+                .createdBy(createdBy != null ? createdBy : "system (inverted)")
+                .build();
+        reverse = mappingDefinitionRepository.save(reverse);
+
+        List<MappingRule> invertedRules = new ArrayList<>();
+        for (MappingRule fRule : forward.getRules()) {
+            List<String> forwardSources = parseJsonList(fRule.getSourcePaths());
+            String forwardTarget = fRule.getTargetPath();
+
+            if (forwardSources.isEmpty() || forwardTarget == null) continue;
+
+            TransformationOpType invOp = invertOperation(fRule.getOperation());
+            Map<String, Object> invParams = invertParameters(fRule.getOperation(), parseJsonMap(fRule.getParametersJson()));
+
+            MappingRule invRule = MappingRule.builder()
+                    .mappingDefinition(reverse)
+                    .sourcePaths(writeJson(List.of(forwardTarget)))
+                    .targetPath(forwardSources.get(0))
+                    .operation(invOp)
+                    .parametersJson(writeJson(invParams))
+                    .matchMethod(com.schemabridge.domain.enums.MatchMethod.MANUAL)
+                    .confidence(fRule.getConfidence())
+                    .status(MappingStatus.SUGGESTED)
+                    .explanation("Inverted reverse rule derived from: " + forwardTarget + " -> " + forwardSources.get(0))
+                    .build();
+            invertedRules.add(invRule);
+        }
+        reverse.getRules().addAll(invertedRules);
+        reverse = mappingDefinitionRepository.save(reverse);
+
+        auditService.recordEvent("MappingDefinition", reverse.getId(), "INVERT_MAPPING", createdBy, null,
+                "Synthesized reverse mapping v" + nextVersion + " with " + invertedRules.size() + " inverted rules");
+
+        return mapToMappingDto(reverse, List.of(), List.of(), List.of());
+    }
+
+    private TransformationOpType invertOperation(TransformationOpType op) {
+        if (op == null) return TransformationOpType.RENAME;
+        return switch (op) {
+            case STRING_TO_NUMBER -> TransformationOpType.NUMBER_TO_STRING;
+            case NUMBER_TO_STRING -> TransformationOpType.STRING_TO_NUMBER;
+            case STRING_TO_BOOLEAN -> TransformationOpType.BOOLEAN_TO_STRING;
+            case BOOLEAN_TO_STRING -> TransformationOpType.STRING_TO_BOOLEAN;
+            case FLATTEN -> TransformationOpType.NEST;
+            case NEST -> TransformationOpType.FLATTEN;
+            default -> op;
+        };
+    }
+
+    private Map<String, Object> invertParameters(TransformationOpType op, Map<String, Object> params) {
+        if (params == null || params.isEmpty()) return Collections.emptyMap();
+        Map<String, Object> inv = new HashMap<>(params);
+        if (op == TransformationOpType.DATE_FORMAT) {
+            Object srcFmt = params.get("sourceFormat");
+            Object tgtFmt = params.get("targetFormat");
+            if (tgtFmt != null) inv.put("sourceFormat", tgtFmt);
+            if (srcFmt != null) inv.put("targetFormat", srcFmt);
+        }
+        return inv;
+    }
+
+    private List<String> parseJsonList(String json) {
+        if (json == null || json.isBlank()) return Collections.emptyList();
+        try {
+            return objectMapper.readValue(json, new TypeReference<List<String>>() {});
+        } catch (Exception e) {
+            return List.of(json);
+        }
+    }
+
+    private Map<String, Object> parseJsonMap(String json) {
+        if (json == null || json.isBlank()) return Collections.emptyMap();
+        try {
+            return objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {});
+        } catch (Exception e) {
+            return Collections.emptyMap();
+        }
     }
 
     @Transactional

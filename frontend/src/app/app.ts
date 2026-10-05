@@ -13,6 +13,7 @@ import {
   AviatorHealth,
   RegisteredApi
 } from './models/schema-bridge.models';
+import { HOST_SYSTEM_A_SWAGGER, DESTINATION_SYSTEM_B_SWAGGER } from './samples/sample-swaggers';
 
 @Component({
   selector: 'app-root',
@@ -72,6 +73,13 @@ export class App implements OnInit {
   sourceSchemaType: string = 'SAMPLE_JSON';
   targetSchemaType: string = 'SAMPLE_JSON';
 
+  // Swagger/OpenAPI File Upload State
+  sourceSchemaFile: File | null = null;
+  targetSchemaFile: File | null = null;
+  isUploadingSourceFile: boolean = false;
+  isUploadingTargetFile: boolean = false;
+  uploadErrorMessage: string = '';
+
   // Modals
   showNewProjectModal: boolean = false;
   isCreatingProject: boolean = false;
@@ -79,6 +87,31 @@ export class App implements OnInit {
   newProjectDescription: string = '';
   newProjectSourceSystem: string = 'Source System A';
   newProjectTargetSystem: string = 'Target System B';
+  newProjectApproverEmail: string = 'approver@enterprise.com';
+  newProjectAutoApprove: boolean = true;
+
+  // Asymmetric Schemas / Live Payload Tracing (NO Swagger support)
+  sourceInputMode: 'SWAGGER' | 'TRACE' = 'SWAGGER';
+  targetInputMode: 'SWAGGER' | 'TRACE' = 'SWAGGER';
+  sourceTracePayload: string = '{\n  "bookName": "The Hobbit",\n  "bookYear": 1937,\n  "author": "J.R.R. Tolkien",\n  "stock": 42\n}';
+  targetTracePayload: string = '{\n  "sheetName": "The Hobbit",\n  "sheetYear": "1937",\n  "writer": "J.R.R. Tolkien",\n  "available": true\n}';
+  isTracingSource: boolean = false;
+  isTracingTarget: boolean = false;
+
+  // Selective 100 APIs Endpoint Picker State
+  showEndpointPickerModal: boolean = false;
+  parsedEndpoints: any[] = [];
+  endpointSearchQuery: string = '';
+  endpointPickerDirection: 'SOURCE_TO_TARGET' | 'TARGET_TO_SOURCE' = 'TARGET_TO_SOURCE';
+  pendingRawSpec: string = '';
+  isParsingEndpoints: boolean = false;
+  isImportingSelectedEndpoints: boolean = false;
+
+  // Batch Approval & Inversion State
+  isApprovingAll: boolean = false;
+  isApprovingHighConfidence: boolean = false;
+  isInvertingMapping: boolean = false;
+  approvalSuccessMessage: string = '';
 
   showEditRuleModal: boolean = false;
   editingRule: MappingRule | null = null;
@@ -505,7 +538,9 @@ export class App implements OnInit {
       name: this.newProjectName.trim(),
       description: this.newProjectDescription.trim(),
       sourceSystemName: this.newProjectSourceSystem.trim(),
-      targetSystemName: this.newProjectTargetSystem.trim()
+      targetSystemName: this.newProjectTargetSystem.trim(),
+      approverEmail: this.newProjectApproverEmail.trim(),
+      autoApproveEnabled: this.newProjectAutoApprove
     }).subscribe({
       next: (project) => {
         this.isCreatingProject = false;
@@ -608,9 +643,108 @@ export class App implements OnInit {
     });
   }
 
+  // Swagger/OpenAPI File Upload
+  onSourceFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.sourceSchemaFile = input.files && input.files.length > 0 ? input.files[0] : null;
+  }
+
+  onTargetFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.targetSchemaFile = input.files && input.files.length > 0 ? input.files[0] : null;
+  }
+
+  uploadSourceSchemaFile(): void {
+    if (!this.selectedProject || !this.sourceSchemaFile) return;
+    this.isUploadingSourceFile = true;
+    this.uploadErrorMessage = '';
+    this.cdr.detectChanges();
+
+    this.api.uploadSourceSchema(this.selectedProject.id, this.sourceSchemaFile).subscribe({
+      next: (srcResp) => {
+        this.sourceFields = srcResp.fields;
+        this.sourceSchemaType = srcResp.schemaType;
+        this.isUploadingSourceFile = false;
+        this.loadProjectData(this.selectedProject!.id);
+        this.cdr.detectChanges();
+      },
+      error: (err) => {
+        this.isUploadingSourceFile = false;
+        this.uploadErrorMessage = 'Failed to upload Source Swagger/Schema file: ' + (err.error?.message || err.message);
+        this.cdr.detectChanges();
+      }
+    });
+  }
+
+  uploadTargetSchemaFile(): void {
+    if (!this.selectedProject || !this.targetSchemaFile) return;
+    this.isUploadingTargetFile = true;
+    this.uploadErrorMessage = '';
+    this.cdr.detectChanges();
+
+    this.api.uploadTargetSchema(this.selectedProject.id, this.targetSchemaFile).subscribe({
+      next: (tgtResp) => {
+        this.targetFields = tgtResp.fields;
+        this.targetSchemaType = tgtResp.schemaType;
+        this.isUploadingTargetFile = false;
+        this.loadProjectData(this.selectedProject!.id);
+        this.cdr.detectChanges();
+      },
+      error: (err) => {
+        this.isUploadingTargetFile = false;
+        this.uploadErrorMessage = 'Failed to upload Target Swagger/Schema file: ' + (err.error?.message || err.message);
+        this.cdr.detectChanges();
+      }
+    });
+  }
+
+  // Uploads both Swagger/OpenAPI documents (if selected) and lets Aviator auto-generate mapping suggestions
+  uploadBothAndAutoMap(): void {
+    if (!this.selectedProject || !this.sourceSchemaFile || !this.targetSchemaFile) {
+      this.uploadErrorMessage = 'Please select both a source and a target Swagger/OpenAPI file before auto-mapping.';
+      this.cdr.detectChanges();
+      return;
+    }
+    this.isUploadingSourceFile = true;
+    this.isUploadingTargetFile = true;
+    this.uploadErrorMessage = '';
+    this.cdr.detectChanges();
+
+    this.api.uploadSourceSchema(this.selectedProject.id, this.sourceSchemaFile).subscribe({
+      next: (srcResp) => {
+        this.sourceFields = srcResp.fields;
+        this.sourceSchemaType = srcResp.schemaType;
+        this.isUploadingSourceFile = false;
+
+        this.api.uploadTargetSchema(this.selectedProject!.id, this.targetSchemaFile!).subscribe({
+          next: (tgtResp) => {
+            this.targetFields = tgtResp.fields;
+            this.targetSchemaType = tgtResp.schemaType;
+            this.isUploadingTargetFile = false;
+
+            // Both schemas are in place - let Aviator figure out the field correspondences automatically
+            this.activeTab = 'mapping';
+            this.cdr.detectChanges();
+            this.generateMappings();
+          },
+          error: (err) => {
+            this.isUploadingTargetFile = false;
+            this.uploadErrorMessage = 'Target file upload failed: ' + (err.error?.message || err.message);
+            this.cdr.detectChanges();
+          }
+        });
+      },
+      error: (err) => {
+        this.isUploadingSourceFile = false;
+        this.isUploadingTargetFile = false;
+        this.uploadErrorMessage = 'Source file upload failed: ' + (err.error?.message || err.message);
+        this.cdr.detectChanges();
+      }
+    });
+  }
+
   // Pre-fill Sample Schema and automatically extract fields into database
-  loadPromptSampleData(): void {
-    if (!this.selectedProject) return;
+  loadPromptSampleData(): void {    if (!this.selectedProject) return;
     this.sourceSchemaInput = `{\n  "name": "Baljinder Singh",\n  "dob": "10/05/1992",\n  "active": "Yes",\n  "project_id": 1001,\n  "contact": {\n    "email": "user@example.com"\n  }\n}`;
     this.targetSchemaInput = `{\n  "userName": "string",\n  "dateOfBirth": "yyyy-MM-dd",\n  "accountEnabled": "boolean",\n  "projectId": "string",\n  "emailAddress": "string"\n}`;
     this.isImportingSchemas = true;
@@ -646,6 +780,134 @@ export class App implements OnInit {
         this.cdr.detectChanges();
       }
     });
+  }
+
+  // Load Host Swagger (System A) sample into Source Editor
+  loadHostSwaggerSample(): void {
+    this.sourceSchemaType = 'OPENAPI';
+    this.sourceSchemaInput = HOST_SYSTEM_A_SWAGGER;
+    this.setupErrorMessage = '';
+    this.uploadErrorMessage = '';
+    if (this.selectedProject) {
+      this.importSource();
+    }
+  }
+
+  // Load Destination Swagger (System B) sample into Target Editor
+  loadDestinationSwaggerSample(): void {
+    this.targetSchemaType = 'OPENAPI';
+    this.targetSchemaInput = DESTINATION_SYSTEM_B_SWAGGER;
+    this.setupErrorMessage = '';
+    this.uploadErrorMessage = '';
+    if (this.selectedProject) {
+      this.importTarget();
+    }
+  }
+
+  // Load both Swagger samples and extract fields for demo
+  loadBothSwaggerSamples(): void {
+    if (!this.selectedProject) return;
+    this.sourceSchemaType = 'OPENAPI';
+    this.sourceSchemaInput = HOST_SYSTEM_A_SWAGGER;
+    this.targetSchemaType = 'OPENAPI';
+    this.targetSchemaInput = DESTINATION_SYSTEM_B_SWAGGER;
+    this.isImportingSchemas = true;
+    this.setupErrorMessage = '';
+    this.uploadErrorMessage = '';
+    this.cdr.detectChanges();
+
+    this.api.importSourceSchema(this.selectedProject.id, {
+      schemaType: this.sourceSchemaType,
+      schemaContent: this.sourceSchemaInput,
+      schemaName: 'System_A_Host_Swagger'
+    }).subscribe({
+      next: (srcResp) => {
+        this.sourceFields = srcResp.fields;
+        this.api.importTargetSchema(this.selectedProject!.id, {
+          schemaType: this.targetSchemaType,
+          schemaContent: this.targetSchemaInput,
+          schemaName: 'System_B_Destination_Swagger'
+        }).subscribe({
+          next: (tgtResp) => {
+            this.targetFields = tgtResp.fields;
+            this.isImportingSchemas = false;
+            this.loadProjectData(this.selectedProject!.id);
+            this.cdr.detectChanges();
+          },
+          error: (err) => {
+            this.isImportingSchemas = false;
+            this.setupErrorMessage = 'Failed to import Destination Swagger: ' + (err.error?.message || err.message);
+            this.cdr.detectChanges();
+          }
+        });
+      },
+      error: (err) => {
+        this.isImportingSchemas = false;
+        this.setupErrorMessage = 'Failed to import Host Swagger: ' + (err.error?.message || err.message);
+        this.cdr.detectChanges();
+      }
+    });
+  }
+
+  // Load both Swagger samples and immediately trigger Aviator auto-mapping
+  loadBothSwaggersAndAutoMap(): void {
+    if (!this.selectedProject) return;
+    this.sourceSchemaType = 'OPENAPI';
+    this.sourceSchemaInput = HOST_SYSTEM_A_SWAGGER;
+    this.targetSchemaType = 'OPENAPI';
+    this.targetSchemaInput = DESTINATION_SYSTEM_B_SWAGGER;
+    this.isImportingSchemas = true;
+    this.setupErrorMessage = '';
+    this.uploadErrorMessage = '';
+    this.cdr.detectChanges();
+
+    this.api.importSourceSchema(this.selectedProject.id, {
+      schemaType: this.sourceSchemaType,
+      schemaContent: this.sourceSchemaInput,
+      schemaName: 'System_A_Host_Swagger'
+    }).subscribe({
+      next: (srcResp) => {
+        this.sourceFields = srcResp.fields;
+        this.api.importTargetSchema(this.selectedProject!.id, {
+          schemaType: this.targetSchemaType,
+          schemaContent: this.targetSchemaInput,
+          schemaName: 'System_B_Destination_Swagger'
+        }).subscribe({
+          next: (tgtResp) => {
+            this.targetFields = tgtResp.fields;
+            this.isImportingSchemas = false;
+            this.activeTab = 'mapping';
+            this.cdr.detectChanges();
+            this.generateMappings();
+          },
+          error: (err) => {
+            this.isImportingSchemas = false;
+            this.setupErrorMessage = 'Failed to import Destination Swagger: ' + (err.error?.message || err.message);
+            this.cdr.detectChanges();
+          }
+        });
+      },
+      error: (err) => {
+        this.isImportingSchemas = false;
+        this.setupErrorMessage = 'Failed to import Host Swagger: ' + (err.error?.message || err.message);
+        this.cdr.detectChanges();
+      }
+    });
+  }
+
+  // Helper to download sample swagger files directly from browser
+  downloadSwaggerFile(type: 'host' | 'destination'): void {
+    const filename = type === 'host' ? 'host-system-a-swagger.json' : 'destination-system-b-swagger.json';
+    const content = type === 'host' ? HOST_SYSTEM_A_SWAGGER : DESTINATION_SYSTEM_B_SWAGGER;
+    const blob = new Blob([content], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }
 
   // Proceed to Mapping: Automatically ensures both schemas are saved before generating mappings
@@ -920,4 +1182,248 @@ export class App implements OnInit {
       this.cdr.detectChanges();
     }
   }
+
+  // Asymmetric Schema: Trace live JSON/cURL payload for system with NO Swagger
+  traceSourcePayload(): void {
+    if (!this.selectedProject || !this.sourceTracePayload.trim()) return;
+    this.isTracingSource = true;
+    this.setupErrorMessage = '';
+    this.cdr.detectChanges();
+
+    this.api.tracePayload(this.selectedProject.id, {
+      payload: this.sourceTracePayload,
+      direction: 'SOURCE_TO_TARGET',
+      systemName: this.selectedProject.sourceSystemName || 'System A'
+    }).subscribe({
+      next: (res) => {
+        this.sourceFields = res.fields;
+        this.sourceSchemaType = res.schemaType;
+        this.sourceSchemaInput = this.sourceTracePayload;
+        this.isTracingSource = false;
+        this.loadProjectData(this.selectedProject!.id);
+        this.cdr.detectChanges();
+      },
+      error: (err) => {
+        this.isTracingSource = false;
+        this.setupErrorMessage = 'Failed to trace Source payload: ' + (err.error?.message || err.message);
+        this.cdr.detectChanges();
+      }
+    });
+  }
+
+  traceTargetPayload(): void {
+    if (!this.selectedProject || !this.targetTracePayload.trim()) return;
+    this.isTracingTarget = true;
+    this.setupErrorMessage = '';
+    this.cdr.detectChanges();
+
+    this.api.tracePayload(this.selectedProject.id, {
+      payload: this.targetTracePayload,
+      direction: 'TARGET_TO_SOURCE',
+      systemName: this.selectedProject.targetSystemName || 'System B'
+    }).subscribe({
+      next: (res) => {
+        this.targetFields = res.fields;
+        this.targetSchemaType = res.schemaType;
+        this.targetSchemaInput = this.targetTracePayload;
+        this.isTracingTarget = false;
+        this.loadProjectData(this.selectedProject!.id);
+        this.cdr.detectChanges();
+      },
+      error: (err) => {
+        this.isTracingTarget = false;
+        this.setupErrorMessage = 'Failed to trace Target payload: ' + (err.error?.message || err.message);
+        this.cdr.detectChanges();
+      }
+    });
+  }
+
+  // 100 APIs Selective Endpoint Picker
+  openEndpointPicker(direction: 'SOURCE_TO_TARGET' | 'TARGET_TO_SOURCE'): void {
+    if (!this.selectedProject) return;
+    this.endpointPickerDirection = direction;
+    this.endpointSearchQuery = '';
+    this.isParsingEndpoints = true;
+    this.setupErrorMessage = '';
+    this.cdr.detectChanges();
+
+    const specContent = direction === 'SOURCE_TO_TARGET' ? this.sourceSchemaInput : this.targetSchemaInput;
+    const file = direction === 'SOURCE_TO_TARGET' ? this.sourceSchemaFile : this.targetSchemaFile;
+
+    if (file) {
+      this.api.parseEndpointsFromFile(this.selectedProject.id, file).subscribe({
+        next: (endpoints) => {
+          this.parsedEndpoints = endpoints.map(ep => ({ ...ep, selected: true }));
+          this.isParsingEndpoints = false;
+          this.showEndpointPickerModal = true;
+          this.cdr.detectChanges();
+        },
+        error: (err) => {
+          this.isParsingEndpoints = false;
+          this.setupErrorMessage = 'Failed to parse endpoints from file: ' + (err.error?.message || err.message);
+          this.cdr.detectChanges();
+        }
+      });
+    } else if (specContent && specContent.trim()) {
+      this.pendingRawSpec = specContent;
+      this.api.parseEndpointsFromRaw(this.selectedProject.id, specContent).subscribe({
+        next: (endpoints) => {
+          this.parsedEndpoints = endpoints.map(ep => ({ ...ep, selected: true }));
+          this.isParsingEndpoints = false;
+          this.showEndpointPickerModal = true;
+          this.cdr.detectChanges();
+        },
+        error: (err) => {
+          this.isParsingEndpoints = false;
+          this.setupErrorMessage = 'Failed to parse endpoints: ' + (err.error?.message || err.message);
+          this.cdr.detectChanges();
+        }
+      });
+    } else {
+      this.isParsingEndpoints = false;
+      this.setupErrorMessage = 'Please paste a Swagger/OpenAPI specification or upload a file first.';
+      this.cdr.detectChanges();
+    }
+  }
+
+  toggleSelectAllEndpoints(event: Event): void {
+    const checked = (event.target as HTMLInputElement).checked;
+    this.parsedEndpoints.forEach(ep => ep.selected = checked);
+    this.cdr.detectChanges();
+  }
+
+  getFilteredEndpoints(): any[] {
+    if (!this.endpointSearchQuery.trim()) {
+      return this.parsedEndpoints;
+    }
+    const q = this.endpointSearchQuery.toLowerCase();
+    return this.parsedEndpoints.filter(ep =>
+      (ep.path && ep.path.toLowerCase().includes(q)) ||
+      (ep.httpMethod && ep.httpMethod.toLowerCase().includes(q)) ||
+      (ep.summary && ep.summary.toLowerCase().includes(q)) ||
+      (ep.tag && ep.tag.toLowerCase().includes(q))
+    );
+  }
+
+  getSelectedEndpointsCount(): number {
+    return this.parsedEndpoints.filter(ep => ep.selected).length;
+  }
+
+  areAllEndpointsSelected(): boolean {
+    return this.parsedEndpoints.length > 0 && this.parsedEndpoints.every(ep => ep.selected);
+  }
+
+  confirmEndpointSelection(): void {
+    if (!this.selectedProject) return;
+    const selectedPaths = this.parsedEndpoints.filter(ep => ep.selected).map(ep => ep.path);
+    if (selectedPaths.length === 0) {
+      alert('Please select at least one endpoint to import.');
+      return;
+    }
+
+    const direction = this.endpointPickerDirection;
+    const systemName = (direction === 'SOURCE_TO_TARGET' ? this.selectedProject.sourceSystemName : this.selectedProject.targetSystemName) || (direction === 'SOURCE_TO_TARGET' ? 'System A' : 'System B');
+    const rawSpec = this.pendingRawSpec || (direction === 'SOURCE_TO_TARGET' ? this.sourceSchemaInput : this.targetSchemaInput);
+
+    this.isImportingSelectedEndpoints = true;
+    this.cdr.detectChanges();
+
+    this.api.importSelectedEndpoints(this.selectedProject.id, {
+      direction,
+      systemName,
+      rawSpecContent: rawSpec,
+      selectedEndpointPaths: selectedPaths
+    }).subscribe({
+      next: (res) => {
+        if (direction === 'SOURCE_TO_TARGET') {
+          this.sourceFields = res.fields;
+        } else {
+          this.targetFields = res.fields;
+        }
+        this.isImportingSelectedEndpoints = false;
+        this.showEndpointPickerModal = false;
+        this.loadProjectData(this.selectedProject!.id);
+        this.cdr.detectChanges();
+      },
+      error: (err) => {
+        this.isImportingSelectedEndpoints = false;
+        alert('Failed to import selected endpoints: ' + (err.error?.message || err.message));
+        this.cdr.detectChanges();
+      }
+    });
+  }
+
+  // Batch Approval Operations
+  approveAllMappings(): void {
+    if (!this.selectedProject || !this.activeMapping) return;
+    this.isApprovingAll = true;
+    this.approvalSuccessMessage = '';
+    this.cdr.detectChanges();
+
+    this.api.approveAllMappings(this.selectedProject.id, this.activeMapping.id).subscribe({
+      next: (m) => {
+        this.activeMapping = m;
+        this.isApprovingAll = false;
+        this.approvalSuccessMessage = `All ${m.rules.length} rules approved successfully!`;
+        this.cdr.detectChanges();
+        setTimeout(() => { this.approvalSuccessMessage = ''; this.cdr.detectChanges(); }, 4000);
+      },
+      error: (err) => {
+        this.isApprovingAll = false;
+        alert('Failed to approve all rules: ' + (err.error?.message || err.message));
+        this.cdr.detectChanges();
+      }
+    });
+  }
+
+  approveAllHighConfidence(): void {
+    if (!this.selectedProject || !this.activeMapping) return;
+    this.isApprovingHighConfidence = true;
+    this.approvalSuccessMessage = '';
+    this.cdr.detectChanges();
+
+    this.api.approveAllHighConfidence(this.selectedProject.id, this.activeMapping.id).subscribe({
+      next: (m) => {
+        this.activeMapping = m;
+        this.isApprovingHighConfidence = false;
+        const approvedCount = m.rules.filter(r => r.status === 'APPROVED').length;
+        const pendingCount = m.rules.filter(r => r.status !== 'APPROVED').length;
+        this.approvalSuccessMessage = `Approved high-confidence rules (${approvedCount} total approved). ${pendingCount} ambiguous rules remain for manual review.`;
+        this.cdr.detectChanges();
+        setTimeout(() => { this.approvalSuccessMessage = ''; this.cdr.detectChanges(); }, 5000);
+      },
+      error: (err) => {
+        this.isApprovingHighConfidence = false;
+        alert('Failed to approve high-confidence rules: ' + (err.error?.message || err.message));
+        this.cdr.detectChanges();
+      }
+    });
+  }
+
+  // Invert Mapping (Bi-directional inversion)
+  invertCurrentMapping(): void {
+    if (!this.selectedProject || !this.activeMapping) return;
+    if (!confirm(`Generate inverse bidirectional mapping for ${this.activeMapping.rules.length} rules? This creates a new mapping reversing target -> source.`)) {
+      return;
+    }
+    this.isInvertingMapping = true;
+    this.cdr.detectChanges();
+
+    this.api.invertMapping(this.selectedProject.id, this.activeMapping.id).subscribe({
+      next: (inverted) => {
+        this.isInvertingMapping = false;
+        this.activeMapping = inverted;
+        this.versions.unshift(inverted);
+        this.approvalSuccessMessage = `Inverted mapping v${inverted.version} created successfully! Direction is now reversed.`;
+        this.cdr.detectChanges();
+        setTimeout(() => { this.approvalSuccessMessage = ''; this.cdr.detectChanges(); }, 5000);
+      },
+      error: (err) => {
+        this.isInvertingMapping = false;
+        alert('Failed to invert mapping: ' + (err.error?.message || err.message));
+        this.cdr.detectChanges();
+      }
+    });
+  }
 }
+

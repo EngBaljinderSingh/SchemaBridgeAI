@@ -1,0 +1,125 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "System A - Legacy Core POS & Billing API",
+    "version": "1.0.0",
+    "description": "Host System API for legacy point-of-sale and customer billing. Uses snake_case naming conventions, DD/MM/YYYY date formats, and string status flags."
+  },
+  "servers": [
+    {
+      "url": "https://pos.internal.enterprise.org/api/v1",
+      "description": "Internal Core POS Gateway"
+    }
+  ],
+  "paths": {
+    "/pos/orders": {
+      "post": {
+        "summary": "Submit Order / Customer Record",
+        "description": "Submits a point-of-sale customer order from the legacy terminal",
+        "operationId": "submitLegacyOrder",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LegacyOrderPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Order acknowledged",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LegacyOrderPayload"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "LegacyOrderPayload": {
+        "type": "object",
+        "required": [
+          "order_num",
+          "cust_id",
+          "name",
+          "total_amount"
+        ],
+        "properties": {
+          "order_num": {
+            "type": "string",
+            "description": "Legacy unique order sequence identifier",
+            "example": "ORD-2026-991"
+          },
+          "cust_id": {
+            "type": "string",
+            "description": "Customer alphanumeric identifier in legacy POS",
+            "example": "CUST-4081"
+          },
+          "name": {
+            "type": "string",
+            "description": "Customer full legal name",
+            "example": "Dr. Sarah Connor"
+          },
+          "dob": {
+            "type": "string",
+            "format": "dd/MM/yyyy",
+            "description": "Date of birth in legacy UK/Indian format DD/MM/YYYY",
+            "example": "15/08/1988"
+          },
+          "active": {
+            "type": "string",
+            "enum": [
+              "Yes",
+              "No"
+            ],
+            "description": "Account active flag ('Yes' / 'No')",
+            "example": "Yes"
+          },
+          "tier": {
+            "type": "string",
+            "enum": [
+              "STANDARD_TIER",
+              "SILVER_TIER",
+              "GOLD_TIER",
+              "PLATINUM_TIER"
+            ],
+            "description": "Customer loyalty tier identifier",
+            "example": "GOLD_TIER"
+          },
+          "contact": {
+            "type": "object",
+            "description": "Nested contact communications object",
+            "properties": {
+              "email": {
+                "type": "string",
+                "format": "email",
+                "description": "Primary customer contact email",
+                "example": "sarah.c@cyberdyne.org"
+              },
+              "phone": {
+                "type": "string",
+                "format": "phone",
+                "description": "Primary telephone contact number",
+                "example": "+1-555-0199"
+              }
+            }
+          },
+          "total_amount": {
+            "type": "number",
+            "format": "double",
+            "description": "Total gross purchase amount in USD",
+            "example": 499.99
+          }
+        }
+      }
+    }
+  }
+}

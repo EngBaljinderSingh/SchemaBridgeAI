@@ -9,6 +9,7 @@ credentials/
 
 # Java build artifacts
 backend/target/
+backend/data/
 *.class
 *.jar
 *.war

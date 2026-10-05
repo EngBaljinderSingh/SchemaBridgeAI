@@ -92,6 +92,48 @@ public class DemoController {
     }
 
     /**
+     * Returns sample OpenAPI 3.0 / Swagger specification for Host System (System A - Legacy Core POS).
+     */
+    @GetMapping(value = "/swagger/host", produces = "application/json")
+    @Operation(summary = "Get sample OpenAPI 3.0 / Swagger specification for Host System (System A)")
+    public ResponseEntity<String> getHostSystemSwagger() {
+        return ResponseEntity.ok(loadSampleSwaggerResource("samples/host-system-a-swagger.json"));
+    }
+
+    /**
+     * Returns sample OpenAPI 3.0 / Swagger specification for Destination System (System B - Modern Cloud ERP).
+     */
+    @GetMapping(value = "/swagger/destination", produces = "application/json")
+    @Operation(summary = "Get sample OpenAPI 3.0 / Swagger specification for Destination System (System B)")
+    public ResponseEntity<String> getDestinationSystemSwagger() {
+        return ResponseEntity.ok(loadSampleSwaggerResource("samples/destination-system-b-swagger.json"));
+    }
+
+    /**
+     * Returns both sample Swagger specifications and metadata for easy UI demo loading.
+     */
+    @GetMapping("/swagger")
+    @Operation(summary = "Get both Host (System A) and Destination (System B) sample Swagger specifications")
+    public ResponseEntity<Map<String, Object>> getAllSampleSwaggers() {
+        Map<String, Object> resp = new LinkedHashMap<>();
+        String hostJson = loadSampleSwaggerResource("samples/host-system-a-swagger.json");
+        String destJson = loadSampleSwaggerResource("samples/destination-system-b-swagger.json");
+        resp.put("host", Map.of(
+                "systemName", "System A (Legacy Core POS & Billing)",
+                "direction", "SOURCE_TO_TARGET",
+                "schemaType", "OPENAPI",
+                "swaggerJson", hostJson
+        ));
+        resp.put("destination", Map.of(
+                "systemName", "System B (Modern Cloud ERP / Salesforce)",
+                "direction", "TARGET_TO_SOURCE",
+                "schemaType", "OPENAPI",
+                "swaggerJson", destJson
+        ));
+        return ResponseEntity.ok(resp);
+    }
+
+    /**
      * WRITE DEMO: System A writes data meant for System B.
      * SchemaBridge intercepts, transforms deterministically into System B format, validates, and simulates System B receipt.
      */
@@ -370,6 +412,17 @@ public class DemoController {
                         .parameters(Map.of())
                         .build()
         );
+    }
+
+    private String loadSampleSwaggerResource(String path) {
+        try (var is = getClass().getClassLoader().getResourceAsStream(path)) {
+            if (is != null) {
+                return new String(is.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            }
+        } catch (Exception e) {
+            // fallback
+        }
+        return "{}";
     }
 
     private String writeJsonString(Object obj) {

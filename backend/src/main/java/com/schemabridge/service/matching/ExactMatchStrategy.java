@@ -32,33 +32,41 @@ public class ExactMatchStrategy implements MatchStrategy {
             String projectId) {
 
         List<MappingRuleDto> matches = new ArrayList<>();
+        Set<String> mappedSourcePaths = new HashSet<>();
 
+        // Pass 1: Prioritize full path exact match (prevents cross-namespace collisions like order.id vs user.id)
         for (FieldExtractionDto source : availableSources) {
             for (FieldExtractionDto target : availableTargets) {
                 if (alreadyMappedTargetPaths.contains(target.getFieldPath())) {
                     continue;
                 }
 
-                // Check exact fieldName or fieldPath equality
-                boolean isExact = source.getFieldName().equals(target.getFieldName()) ||
-                                  source.getFieldPath().equals(target.getFieldPath());
-
-                if (isExact) {
+                if (source.getFieldPath().equals(target.getFieldPath())) {
                     TransformationOpType op = determineOperation(source, target);
-                    matches.add(MappingRuleDto.builder()
-                            .sourcePaths(List.of(source.getFieldPath()))
-                            .targetPath(target.getFieldPath())
-                            .operation(op)
-                            .parameters(new HashMap<>())
-                            .matchMethod(MatchMethod.EXACT)
-                            .confidence(BigDecimal.valueOf(1.000))
-                            .confidenceLevel(ConfidenceLevel.HIGH)
-                            .status(MappingStatus.SUGGESTED)
-                            .explanation("Exact field name match: '" + source.getFieldName() + "'")
-                            .requiresReview(false)
-                            .build());
-
+                    matches.add(createExactRule(source, target, op));
                     alreadyMappedTargetPaths.add(target.getFieldPath());
+                    mappedSourcePaths.add(source.getFieldPath());
+                    break;
+                }
+            }
+        }
+
+        // Pass 2: Match leaf fieldName for remaining unmapped fields
+        for (FieldExtractionDto source : availableSources) {
+            if (mappedSourcePaths.contains(source.getFieldPath())) {
+                continue;
+            }
+
+            for (FieldExtractionDto target : availableTargets) {
+                if (alreadyMappedTargetPaths.contains(target.getFieldPath())) {
+                    continue;
+                }
+
+                if (source.getFieldName().equals(target.getFieldName())) {
+                    TransformationOpType op = determineOperation(source, target);
+                    matches.add(createExactRule(source, target, op));
+                    alreadyMappedTargetPaths.add(target.getFieldPath());
+                    mappedSourcePaths.add(source.getFieldPath());
                     break;
                 }
             }
@@ -84,5 +92,20 @@ public class ExactMatchStrategy implements MatchStrategy {
             return TransformationOpType.STRING_TO_BOOLEAN;
         }
         return TransformationOpType.RENAME;
+    }
+
+    private MappingRuleDto createExactRule(FieldExtractionDto source, FieldExtractionDto target, TransformationOpType op) {
+        return MappingRuleDto.builder()
+                .sourcePaths(List.of(source.getFieldPath()))
+                .targetPath(target.getFieldPath())
+                .operation(op)
+                .parameters(new HashMap<>())
+                .matchMethod(MatchMethod.EXACT)
+                .confidence(BigDecimal.valueOf(1.000))
+                .confidenceLevel(ConfidenceLevel.HIGH)
+                .status(MappingStatus.SUGGESTED)
+                .explanation("Exact field match: '" + source.getFieldPath() + "' -> '" + target.getFieldPath() + "'")
+                .requiresReview(false)
+                .build();
     }
 }

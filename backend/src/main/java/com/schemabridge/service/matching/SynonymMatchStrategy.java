@@ -57,10 +57,13 @@ public class SynonymMatchStrategy implements MatchStrategy {
                 boolean isSynonymMatch = checkSynonymMatch(srcName, tgtName, allSynonyms) ||
                                         checkSynonymMatch(srcPath, tgtPath, allSynonyms);
 
-                // Check nested leaf matching (e.g. contact.email -> emailAddress)
-                if (!isSynonymMatch && srcPath.contains(".")) {
-                    String leafSrc = srcPath.substring(srcPath.lastIndexOf('.') + 1);
-                    isSynonymMatch = checkSynonymMatch(leafSrc, tgtName, allSynonyms);
+                // Check nested leaf matching (e.g. contact.email -> emailAddress, or email -> contact.emailAddress, or user.email -> profile.emailAddress)
+                if (!isSynonymMatch) {
+                    String leafSrc = srcPath.contains(".") ? srcPath.substring(srcPath.lastIndexOf('.') + 1) : srcName;
+                    String leafTgt = tgtPath.contains(".") ? tgtPath.substring(tgtPath.lastIndexOf('.') + 1) : tgtName;
+                    isSynonymMatch = checkSynonymMatch(leafSrc, leafTgt, allSynonyms) ||
+                                     checkSynonymMatch(leafSrc, tgtName, allSynonyms) ||
+                                     checkSynonymMatch(srcName, leafTgt, allSynonyms);
                 }
 
                 if (isSynonymMatch) {

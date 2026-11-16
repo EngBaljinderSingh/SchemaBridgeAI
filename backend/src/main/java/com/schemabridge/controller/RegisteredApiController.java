@@ -2,6 +2,9 @@ package com.schemabridge.controller;
 
 import com.schemabridge.dto.ApiCreateRequest;
 import com.schemabridge.dto.ApiUpdateRequest;
+import com.schemabridge.dto.AutoMappedApiPairDto;
+import com.schemabridge.dto.AutoMatchEndpointsRequest;
+import com.schemabridge.dto.BulkRegisterApisResponse;
 import com.schemabridge.dto.MappingRuleDto;
 import com.schemabridge.dto.RegisteredApiDto;
 import com.schemabridge.service.RegisteredApiService;
@@ -64,6 +67,22 @@ public class RegisteredApiController {
             @PathVariable String apiId) {
         apiService.deleteApi(projectId, apiId);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/auto-match")
+    @Operation(summary = "Auto-discover and pair endpoints between Source and Target Swagger/OpenAPI specs")
+    public ResponseEntity<List<AutoMappedApiPairDto>> autoMatchEndpoints(
+            @PathVariable String projectId,
+            @RequestBody(required = false) AutoMatchEndpointsRequest request) {
+        return ResponseEntity.ok(apiService.autoMatchEndpoints(projectId, request));
+    }
+
+    @PostMapping("/bulk-register")
+    @Operation(summary = "Bulk-register approved auto-matched API endpoints into the API Registry")
+    public ResponseEntity<BulkRegisterApisResponse> bulkRegisterApis(
+            @PathVariable String projectId,
+            @Valid @RequestBody List<ApiCreateRequest> requests) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(apiService.bulkRegisterApis(projectId, requests));
     }
 
     @PostMapping("/{apiId}/mappings/generate")

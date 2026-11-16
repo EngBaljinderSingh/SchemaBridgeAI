@@ -47,6 +47,11 @@
       <span>Aviator AI: {{ aviatorHealth?.status === 'UP' ? 'Connected' : 'Fallback Active' }} ({{ aviatorHealth?.latencyMs }}ms)</span>
     </div>
 
+    <button class="btn btn-secondary btn-sm theme-toggle-btn" (click)="toggleTheme()" data-aid="btn-toggle-theme"
+            [title]="themeMode === 'dark' ? 'Switch to Light Theme' : 'Switch to Dark Theme'">
+      {{ themeMode === 'dark' ? '☀️ Light' : '🌙 Dark' }}
+    </button>
+
     <button class="btn btn-primary btn-sm" (click)="showNewProjectModal = true" data-aid="btn-new-project-header">
       + New Project
     </button>
@@ -170,9 +175,12 @@
           Each API exposes a dedicated <strong>SchemaBridge Gateway URL (#2)</strong> that bridges <strong>Source URL (#1)</strong> and <strong>Target URL (#3)</strong>.
         </p>
       </div>
-      <div style="display: flex; gap: 10px;">
+      <div style="display: flex; gap: 10px; flex-wrap: wrap;">
         <button class="btn btn-secondary" (click)="activeTab = 'gateway'" style="border-color: rgba(16, 185, 129, 0.4); color: #34d399;">
           🌐 Open Live Gateway &amp; Error Logs ({{ gatewayLogs.length }})
+        </button>
+        <button class="btn btn-secondary" (click)="openAutoMapApisModal()" data-aid="btn-auto-map-apis" style="border-color: rgba(139, 92, 246, 0.45); color: #c4b5fd;">
+          ✨ Auto-Map APIs from Swagger
         </button>
         <button *ngIf="registeredApis.length === 0" class="btn btn-secondary" (click)="loadSampleApisForApp()" data-aid="btn-load-sample-apis">
           ⚡ Load Sample APIs (Create &amp; Get)
@@ -197,20 +205,21 @@
     </div>
 
     <!-- APIs Grid -->
-    <div *ngIf="registeredApis.length > 0" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 20px;">
-      <div *ngFor="let api of registeredApis" class="glass-card" style="padding: 24px; display: flex; flex-direction: column; justify-content: space-between;">
-        <div>
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-            <div style="display: flex; align-items: center; gap: 10px;">
-              <span class="badge" [style.background]="api.httpMethod === 'GET' ? 'rgba(59, 130, 246, 0.2)' : api.httpMethod === 'POST' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(245, 158, 11, 0.2)'"
+    <div *ngIf="registeredApis.length > 0" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 20px;">
+      <div *ngFor="let api of registeredApis" class="glass-card" style="padding: 22px; min-width: 0; overflow: hidden; display: flex; flex-direction: column; justify-content: space-between;">
+        <div style="min-width: 0;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
+            <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+              <span class="badge" style="flex-shrink: 0;"
+                    [style.background]="api.httpMethod === 'GET' ? 'rgba(59, 130, 246, 0.2)' : api.httpMethod === 'POST' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(245, 158, 11, 0.2)'"
                     [style.color]="api.httpMethod === 'GET' ? '#60a5fa' : api.httpMethod === 'POST' ? '#34d399' : '#fbbf24'">
                 {{ api.httpMethod }}
               </span>
-              <strong style="font-family: monospace; font-size: 0.9375rem;">{{ api.endpointPath }}</strong>
+              <strong style="font-family: monospace; font-size: 0.9rem; word-break: break-all;">{{ api.endpointPath }}</strong>
             </div>
-            <div style="display: flex; gap: 6px;">
+            <div style="display: flex; gap: 6px; flex-shrink: 0;">
               <span class="badge" [class.badge-high]="api.status === 'ACTIVE'" [class.badge-low]="api.status === 'UNMAPPED'">
-                {{ api.status === 'UNMAPPED' ? '⚠️ UNMAPPED ROUTE' : api.status }}
+                {{ api.status === 'UNMAPPED' ? '⚠️ UNMAPPED' : api.status }}
               </span>
               <span class="badge" [class.badge-high]="api.direction === 'SOURCE_TO_TARGET'" [class.badge-medium]="api.direction === 'TARGET_TO_SOURCE'">
                 {{ api.direction === 'SOURCE_TO_TARGET' ? 'WRITE' : 'READ' }}
@@ -218,30 +227,39 @@
             </div>
           </div>
 
-          <h3 style="font-size: 1.0625rem; margin-bottom: 8px;">{{ api.name }}</h3>
+          <h3 style="font-size: 1.05rem; margin-bottom: 8px;">{{ api.name }}</h3>
           <p style="color: var(--text-secondary); font-size: 0.8125rem; margin-bottom: 14px;">
             {{ api.description || 'No description provided.' }}
           </p>
 
-          <!-- 3 URLs Box per API -->
-          <div style="background: rgba(0,0,0,0.32); border-radius: 6px; padding: 10px 12px; margin-bottom: 16px; font-size: 0.74rem; color: var(--text-muted); line-height: 1.65;">
-            <div>1️⃣ Caller (System A): <code style="color: #93c5fd;">{{ api.sourceUrl || (selectedProject?.sourceSystemUrl + api.endpointPath) }}</code></div>
-            <div style="margin-top: 3px; display: flex; justify-content: space-between; align-items: center; gap: 6px;">
-              <span>2️⃣ <strong style="color: #34d399;">Gateway URL (Call This):</strong> <code style="color: #34d399;">{{ api.gatewayUrl || (selectedProject?.gatewayUrl + api.endpointPath) }}</code></span>
-              <button class="btn btn-secondary btn-sm" style="padding: 1px 6px; font-size: 0.68rem;"
-                      (click)="copyText(api.gatewayUrl || (selectedProject?.gatewayUrl + api.endpointPath), 'Gateway URL')">Copy</button>
+          <!-- 3 URLs Box per API (Wrapped cleanly inside card) -->
+          <div style="background: rgba(0,0,0,0.32); border-radius: 6px; padding: 10px 12px; margin-bottom: 16px; font-size: 0.74rem; color: var(--text-muted); line-height: 1.55; min-width: 0; overflow: hidden;">
+            <div style="margin-bottom: 6px; word-break: break-all; overflow-wrap: anywhere;">
+              <span style="display: block; color: var(--text-muted);">1️⃣ Caller (System A):</span>
+              <code style="color: #93c5fd; word-break: break-all; overflow-wrap: anywhere;">{{ api.sourceUrl || (selectedProject?.sourceSystemUrl + api.endpointPath) }}</code>
             </div>
-            <div style="margin-top: 3px;">3️⃣ Target (System B): <code style="color: #c4b5fd;">{{ api.targetUrl || 'Internal Gateway Proxy' }}</code></div>
-            <div style="margin-top: 6px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 6px;">
-              Source Schema: <span [style.color]="api.sourceSchema ? '#34d399' : '#f87171'">{{ api.sourceSchema ? 'Configured ✓' : 'Missing' }}</span> | 
+            <div style="margin-bottom: 6px; background: rgba(16, 185, 129, 0.08); padding: 6px 8px; border-radius: 6px; border: 1px solid rgba(16, 185, 129, 0.25); word-break: break-all; overflow-wrap: anywhere;">
+              <span style="display: block; color: #34d399; font-weight: 700;">2️⃣ Gateway URL (Call This):</span>
+              <code style="color: #34d399; display: block; word-break: break-all; overflow-wrap: anywhere;">{{ api.gatewayUrl || (selectedProject?.gatewayUrl + api.endpointPath) }}</code>
+            </div>
+            <div style="word-break: break-all; overflow-wrap: anywhere;">
+              <span style="display: block; color: var(--text-muted);">3️⃣ Target (System B):</span>
+              <code style="color: #c4b5fd; word-break: break-all; overflow-wrap: anywhere;">{{ api.targetUrl || 'Internal Gateway Proxy' }}</code>
+            </div>
+            <div style="margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 6px;">
+              Source Schema: <span [style.color]="api.sourceSchema ? '#34d399' : '#f87171'">{{ api.sourceSchema ? 'Configured ✓' : 'Missing' }}</span> |
               Target Schema: <span [style.color]="api.targetSchema ? '#34d399' : '#f87171'">{{ api.targetSchema ? 'Configured ✓' : 'Missing (Unmapped Demo)' }}</span>
             </div>
           </div>
         </div>
 
-        <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-subtle); padding-top: 14px;">
-          <div style="display: flex; gap: 8px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-subtle); padding-top: 14px; flex-wrap: wrap; gap: 8px;">
+          <div style="display: flex; gap: 6px; flex-wrap: wrap;">
             <button class="btn btn-secondary btn-sm" (click)="selectApi(api)">Configure URLs</button>
+            <button class="btn btn-secondary btn-sm" style="border-color: rgba(52, 211, 153, 0.4); color: #34d399;"
+                    (click)="copyText(api.gatewayUrl || (selectedProject?.gatewayUrl + api.endpointPath), 'Gateway URL')">
+              📋 Copy URL
+            </button>
             <button class="btn btn-primary btn-sm" (click)="openApiTest(api)">▶ Test via Gateway</button>
           </div>
           <button class="btn btn-secondary btn-sm" style="color: #f87171;" (click)="deleteApi(api.id)" title="Delete API">✕</button>
@@ -294,10 +312,10 @@
         <div style="font-size: 0.9375rem; font-weight: 700; color: #34d399;">
           🔗 Live 3-URL Topology for {{ selectedProject?.name }} (Who Calls Whom?)
         </div>
-        <div style="display: flex; gap: 14px; align-items: center; flex-wrap: wrap; font-size: 0.78rem;">
+        <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap; font-size: 0.78rem;">
           <div>
             <span style="color: var(--text-muted); margin-right: 6px;">Unmapped Fields Policy:</span>
-            <select [(ngModel)]="gatewayUnmappedPolicy" style="width: 195px; padding: 4px 8px; font-size: 0.75rem;">
+            <select [(ngModel)]="gatewayUnmappedPolicy" style="width: 195px; padding: 4px 8px; font-size: 0.75rem;" data-aid="select-unmapped-policy">
               <option value="DROP_WITH_WARNING">DROP_WITH_WARNING (Default)</option>
               <option value="PASS_THROUGH">PASS_THROUGH (Forward Raw)</option>
               <option value="STRICT_REJECT">STRICT_REJECT (Block 422)</option>
@@ -305,11 +323,17 @@
           </div>
           <div>
             <span style="color: var(--text-muted); margin-right: 6px;">If Mapping Missing:</span>
-            <select [(ngModel)]="gatewayMissingPolicy" style="width: 215px; padding: 4px 8px; font-size: 0.75rem;">
+            <select [(ngModel)]="gatewayMissingPolicy" style="width: 215px; padding: 4px 8px; font-size: 0.75rem;" data-aid="select-missing-policy">
               <option value="STRICT_REJECT_422">STRICT_REJECT_422 (Quarantine)</option>
               <option value="PASS_THROUGH_WARNING">PASS_THROUGH_WARNING (202)</option>
             </select>
           </div>
+          <button class="btn btn-primary btn-sm" (click)="saveGatewayPolicies()" [disabled]="isSavingGatewayPolicy" data-aid="btn-save-gateway-policy">
+            {{ isSavingGatewayPolicy ? 'Saving...' : '💾 Save Policy' }}
+          </button>
+          <span *ngIf="gatewayPolicySavedBanner" style="color: #10b981; font-weight: 700; font-size: 0.75rem;">
+            ✓ {{ gatewayPolicySavedBanner }}
+          </span>
         </div>
       </div>
 
@@ -1209,6 +1233,90 @@
   </div>
 </div>
 
+<!-- MODAL: AUTO-MAP APIS FROM SWAGGER -->
+<div *ngIf="showAutoMapApisModal" class="modal-backdrop" data-aid="modal-auto-map-apis">
+  <div class="modal-content animate-slide-up" style="max-width: 920px; max-height: 88vh; overflow-y: auto;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+      <div>
+        <h3 style="margin: 0 0 4px 0;">✨ Auto-Map APIs from Swagger / OpenAPI</h3>
+        <p style="margin: 0; font-size: 0.78rem; color: var(--text-secondary);">
+          Automatically pair endpoints between System A and System B Swagger specs and bulk-register them into the API Registry.
+        </p>
+      </div>
+      <button class="btn btn-secondary btn-sm" (click)="showAutoMapApisModal = false">✕</button>
+    </div>
+
+    <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; margin-bottom: 12px;">
+      <div style="min-width: 0;">
+        <label style="font-size: 0.75rem; color: var(--text-secondary); display: block; margin-bottom: 4px;">
+          System A (Source) Swagger / OpenAPI JSON or YAML
+        </label>
+        <textarea [(ngModel)]="autoMapSourceSpec" rows="5" placeholder="Paste System A OpenAPI/Swagger spec (or auto-loaded from Setup)" style="font-family: monospace; font-size: 0.72rem; width: 100%;"></textarea>
+      </div>
+      <div style="min-width: 0;">
+        <label style="font-size: 0.75rem; color: var(--text-secondary); display: block; margin-bottom: 4px;">
+          System B (Target) Swagger / OpenAPI JSON or YAML
+        </label>
+        <textarea [(ngModel)]="autoMapTargetSpec" rows="5" placeholder="Paste System B OpenAPI/Swagger spec (or auto-loaded from Setup)" style="font-family: monospace; font-size: 0.72rem; width: 100%;"></textarea>
+      </div>
+    </div>
+
+    <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap;">
+      <button class="btn btn-secondary btn-sm" (click)="loadSampleSwaggersForAutoMap()">
+        📋 Load Sample Swaggers
+      </button>
+      <button class="btn btn-primary btn-sm" (click)="runAutoMatchApis()" [disabled]="isAutoMatchingApis">
+        {{ isAutoMatchingApis ? '⏳ Matching Endpoints...' : '🔍 Discover & Match Endpoints' }}
+      </button>
+    </div>
+
+    <div *ngIf="autoMapError" style="padding: 8px 12px; border-radius: 6px; background: rgba(239, 68, 68, 0.14); border: 1px solid rgba(239, 68, 68, 0.4); color: #f87171; font-size: 0.78rem; margin-bottom: 12px;">
+      ⚠️ {{ autoMapError }}
+    </div>
+
+    <div *ngIf="autoMatchedPairs.length > 0" style="border: 1px solid var(--border-subtle); border-radius: 8px; overflow: hidden; margin-bottom: 14px;">
+      <div style="padding: 8px 12px; background: rgba(255,255,255,0.04); font-size: 0.78rem; font-weight: 600; display: flex; justify-content: space-between;">
+        <span>Discovered Endpoint Pairs ({{ autoMatchedPairs.length }})</span>
+        <span style="color: #34d399;">{{ selectedAutoMapCount }} selected for registration</span>
+      </div>
+      <div style="max-height: 260px; overflow-y: auto;">
+        <div *ngFor="let pair of autoMatchedPairs"
+             style="display: grid; grid-template-columns: 32px minmax(0, 1.3fr) minmax(0, 1.3fr) 95px; gap: 10px; align-items: center; padding: 10px 12px; border-top: 1px solid var(--border-subtle); font-size: 0.78rem;">
+          <input type="checkbox" [(ngModel)]="pair.selected" style="width: 16px; height: 16px; cursor: pointer;" />
+          <div style="min-width: 0;">
+            <div>
+              <span class="badge" style="background: rgba(59,130,246,0.2); color: #93c5fd; margin-right: 6px;">{{ pair.sourceMethod }}</span>
+              <code style="word-break: break-all;">{{ pair.sourcePath }}</code>
+            </div>
+            <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 2px;">{{ pair.sourceSummary }}</div>
+          </div>
+          <div style="min-width: 0;">
+            <div>
+              <span class="badge" style="background: rgba(16,185,129,0.2); color: #34d399; margin-right: 6px;">{{ pair.targetMethod }}</span>
+              <code style="word-break: break-all;">{{ pair.targetPath }}</code>
+            </div>
+            <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 2px;">{{ pair.matchReason }}</div>
+          </div>
+          <div style="text-align: right;">
+            <span class="badge"
+                  [style.background]="pair.requiresReview ? 'rgba(245, 158, 11, 0.2)' : 'rgba(16, 185, 129, 0.2)'"
+                  [style.color]="pair.requiresReview ? '#fbbf24' : '#34d399'">
+              {{ (pair.confidence * 100) | number:'1.0-0' }}% {{ pair.requiresReview ? 'REVIEW' : 'MATCH' }}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; justify-content: flex-end; gap: 10px;">
+      <button class="btn btn-secondary" (click)="showAutoMapApisModal = false">Cancel</button>
+      <button class="btn btn-primary" (click)="bulkRegisterSelectedApis()" [disabled]="selectedAutoMapCount === 0 || isBulkRegisteringApis">
+        {{ isBulkRegisteringApis ? '⏳ Registering...' : '✅ Register Selected APIs (' + selectedAutoMapCount + ')' }}
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: REGISTER NEW API -->
 <div *ngIf="showNewApiModal" class="modal-backdrop" data-aid="modal-new-api">
   <div class="modal-content animate-slide-up" style="max-width: 680px;">
@@ -1393,8 +1501,8 @@
 
 <!-- MODAL: ADD CUSTOM MAPPING RULE -->
 <div *ngIf="showCustomRuleModal" class="modal-backdrop" data-aid="modal-custom-rule">
-  <div class="modal-content animate-slide-up" style="max-width: 580px;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+  <div class="modal-content animate-slide-up" style="max-width: 600px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
       <h3 style="margin: 0;">Add Custom Mapping Rule</h3>
       <button class="btn btn-secondary btn-sm" (click)="showCustomRuleModal = false">✕</button>
     </div>
@@ -1402,39 +1510,35 @@
     <div style="display: flex; flex-direction: column; gap: 14px;">
       <div>
         <label style="font-size: 0.75rem; color: var(--text-secondary); display: block; margin-bottom: 4px;">
-          Source Field Path(s) (comma-separated for multi-field operations like CONCAT)
+          Transformation Operation *
         </label>
-        <input type="text" [(ngModel)]="customRuleSourcePaths" placeholder="e.g. name or firstName, lastName or contact.email" data-aid="input-custom-source-paths" />
-        <div *ngIf="sourceFields.length > 0" style="margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px;">
-          <span *ngFor="let sf of sourceFields" (click)="customRuleSourcePaths = sf.fieldPath"
-                style="font-size: 0.7rem; background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px; cursor: pointer;"
-                title="Click to select as source">
-            {{ sf.fieldPath }}
+        <select [(ngModel)]="customRuleOperation" (ngModelChange)="onCustomOperationChange()" data-aid="select-custom-operation">
+          <option *ngFor="let op of supportedOperations" [value]="op">{{ op }}</option>
+        </select>
+        <div style="margin-top: 6px; padding: 8px 10px; border-radius: 6px; background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.3); font-size: 0.75rem; color: var(--text-secondary);">
+          💡 <strong>{{ customRuleOperation }} Guide:</strong> {{ customOperationGuide.hint }}
+        </div>
+      </div>
+
+      <div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+          <label style="font-size: 0.75rem; color: var(--text-secondary);">
+            Source Field Path(s) {{ customRuleOperation === 'CONCAT' ? '(2+ fields required — separate with , or +) *' : '*' }}
+          </label>
+          <span *ngIf="customRuleOperation === 'CONCAT'"
+                [style.color]="parsedCustomSourceList.length >= 2 ? '#34d399' : '#fbbf24'"
+                style="font-size: 0.72rem; font-weight: 600;">
+            {{ parsedCustomSourceList.length }}/2+ fields entered
           </span>
         </div>
+        <input type="text" [(ngModel)]="customRuleSourcePaths" [placeholder]="customOperationGuide.sourcePlaceholder" data-aid="input-custom-source-paths" />
       </div>
 
       <div>
         <label style="font-size: 0.75rem; color: var(--text-secondary); display: block; margin-bottom: 4px;">
           Target Field Path (in destination System B schema) *
         </label>
-        <input type="text" [(ngModel)]="customRuleTargetPath" placeholder="e.g. userName or dateOfBirth or contact.emailAddress" data-aid="input-custom-target-path" />
-        <div *ngIf="targetFields.length > 0" style="margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px;">
-          <span *ngFor="let tf of targetFields" (click)="customRuleTargetPath = tf.fieldPath"
-                style="font-size: 0.7rem; background: rgba(59,130,246,0.15); color: #93c5fd; padding: 2px 6px; border-radius: 4px; cursor: pointer;"
-                title="Click to select as target">
-            {{ tf.fieldPath }}
-          </span>
-        </div>
-      </div>
-
-      <div>
-        <label style="font-size: 0.75rem; color: var(--text-secondary); display: block; margin-bottom: 4px;">
-          Transformation Operation
-        </label>
-        <select [(ngModel)]="customRuleOperation" data-aid="select-custom-operation">
-          <option *ngFor="let op of supportedOperations" [value]="op">{{ op }}</option>
-        </select>
+        <input type="text" [(ngModel)]="customRuleTargetPath" [placeholder]="customOperationGuide.targetPlaceholder" data-aid="input-custom-target-path" />
       </div>
 
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
@@ -1442,13 +1546,13 @@
           <label style="font-size: 0.75rem; color: var(--text-secondary); display: block; margin-bottom: 4px;">
             Parameter Key (Optional)
           </label>
-          <input type="text" [(ngModel)]="customRuleParameterKey" placeholder="e.g. separator or targetFormat" data-aid="input-custom-param-key" />
+          <input type="text" [(ngModel)]="customRuleParameterKey" [placeholder]="customOperationGuide.paramKeyPlaceholder" data-aid="input-custom-param-key" />
         </div>
         <div>
           <label style="font-size: 0.75rem; color: var(--text-secondary); display: block; margin-bottom: 4px;">
             Parameter Value (Optional)
           </label>
-          <input type="text" [(ngModel)]="customRuleParameterValue" placeholder="e.g. ' ' or yyyy-MM-dd" data-aid="input-custom-param-val" />
+          <input type="text" [(ngModel)]="customRuleParameterValue" [placeholder]="customOperationGuide.paramValPlaceholder" data-aid="input-custom-param-val" />
         </div>
       </div>
 
@@ -1456,13 +1560,18 @@
         <label style="font-size: 0.75rem; color: var(--text-secondary); display: block; margin-bottom: 4px;">
           Explanation / Rationale
         </label>
-        <input type="text" [(ngModel)]="customRuleExplanation" placeholder="e.g. Combine first and last name for CCP system" data-aid="input-custom-explanation" />
+        <input type="text" [(ngModel)]="customRuleExplanation" [placeholder]="customOperationGuide.explanationPlaceholder" data-aid="input-custom-explanation" />
+      </div>
+
+      <div *ngIf="customRuleValidationMessage || customRuleError"
+           style="padding: 8px 12px; border-radius: 6px; background: rgba(245, 158, 11, 0.14); border: 1px solid rgba(245, 158, 11, 0.4); color: #fbbf24; font-size: 0.75rem;">
+        ⚠️ {{ customRuleError || customRuleValidationMessage }}
       </div>
     </div>
 
-    <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px;">
+    <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
       <button class="btn btn-secondary" (click)="showCustomRuleModal = false" data-aid="btn-cancel-custom-rule">Cancel</button>
-      <button class="btn btn-primary" (click)="saveCustomRule()" [disabled]="!customRuleTargetPath.trim()" data-aid="btn-save-custom-rule">
+      <button class="btn btn-primary" (click)="saveCustomRule()" [disabled]="!canSaveCustomRule" data-aid="btn-save-custom-rule">
         Save Custom Rule
       </button>
     </div>

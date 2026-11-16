@@ -44,6 +44,8 @@ export class App implements OnInit {
   copiedUrlBanner: string = '';
   gatewayUnmappedPolicy: string = 'DROP_WITH_WARNING';
   gatewayMissingPolicy: string = 'STRICT_REJECT_422';
+  isSavingGatewayPolicy: boolean = false;
+  gatewayPolicySavedBanner: string = '';
 
   // Multi-API Registry State
   registeredApis: RegisteredApi[] = [];
@@ -123,6 +125,16 @@ export class App implements OnInit {
   isParsingEndpoints: boolean = false;
   isImportingSelectedEndpoints: boolean = false;
 
+  // Bulk Auto-Map APIs from Swagger Modal State
+  showAutoMapApisModal: boolean = false;
+  autoMapSourceSpec: string = '';
+  autoMapTargetSpec: string = '';
+  autoMatchedPairs: any[] = [];
+  isAutoMatchingApis: boolean = false;
+  isBulkRegisteringApis: boolean = false;
+  autoMapError: string = '';
+  autoMapStatusMessage: string = '';
+
   // Batch Approval & Inversion State
   isApprovingAll: boolean = false;
   isApprovingHighConfidence: boolean = false;
@@ -143,9 +155,13 @@ export class App implements OnInit {
   customRuleParameterKey: string = '';
   customRuleParameterValue: string = '';
   customRuleExplanation: string = '';
+  customRuleError: string = '';
 
   // Architecture & Gateway Guide Modal
   showArchitectureGuide: boolean = false;
+
+  // Theme Mode ('dark' | 'light')
+  themeMode: 'dark' | 'light' = 'dark';
 
   // Supported Operations list for dropdown
   supportedOperations: string[] = [
@@ -158,8 +174,26 @@ export class App implements OnInit {
   constructor(private api: ApiService, private cdr: ChangeDetectorRef) { }
 
   ngOnInit(): void {
+    const savedTheme = (typeof localStorage !== 'undefined' ? localStorage.getItem('schemabridge_theme') : null) as 'dark' | 'light' | null;
+    this.themeMode = savedTheme === 'light' ? 'light' : 'dark';
+    this.applyThemeClass();
     this.loadProjects();
     this.refreshAviatorHealth();
+  }
+
+  toggleTheme(): void {
+    this.themeMode = this.themeMode === 'dark' ? 'light' : 'dark';
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('schemabridge_theme', this.themeMode);
+    }
+    this.applyThemeClass();
+    this.cdr.detectChanges();
+  }
+
+  private applyThemeClass(): void {
+    if (typeof document === 'undefined') return;
+    document.body.classList.remove('dark-theme', 'light-theme');
+    document.body.classList.add(this.themeMode === 'light' ? 'light-theme' : 'dark-theme');
   }
 
   loadProjects(): void {
@@ -514,6 +548,37 @@ export class App implements OnInit {
     }, 3500);
   }
 
+  saveGatewayPolicies(): void {
+    if (!this.selectedProject || this.isSavingGatewayPolicy) return;
+    this.isSavingGatewayPolicy = true;
+    this.gatewayPolicySavedBanner = '';
+    this.cdr.detectChanges();
+
+    this.api.updateProject(this.selectedProject.id, {
+      name: this.selectedProject.name,
+      description: this.selectedProject.description,
+      unmappedFieldPolicy: this.gatewayUnmappedPolicy,
+      missingMappingPolicy: this.gatewayMissingPolicy
+    }).subscribe({
+      next: (updated) => {
+        this.isSavingGatewayPolicy = false;
+        this.selectedProject = updated;
+        const idx = this.projects.findIndex(p => p.id === updated.id);
+        if (idx !== -1) this.projects[idx] = updated;
+        this.gatewayPolicySavedBanner = `Saved: ${this.gatewayUnmappedPolicy} & ${this.gatewayMissingPolicy}`;
+        this.cdr.detectChanges();
+        setTimeout(() => {
+          this.gatewayPolicySavedBanner = '';
+          this.cdr.detectChanges();
+        }, 3500);
+      },
+      error: () => {
+        this.isSavingGatewayPolicy = false;
+        this.cdr.detectChanges();
+      }
+    });
+  }
+
   // Auto-import schemas from the first API that has both source + target schemas configured
   autoImportSchemasFromApis(projectId: string): void {
     this.api.getApis(projectId).subscribe({
@@ -590,6 +655,88 @@ export class App implements OnInit {
       : '{\n  "customerId": "string",\n  "userName": "string"\n}';
     this.showNewApiModal = true;
     this.cdr.detectChanges();
+  }
+
+  openAutoMapApisModal(): void {
+    this.autoMapError = '';
+    this.autoMapStatusMessage = '';
+    this.autoMatchedPairs = [];
+    const srcSchema = this.schemas.find(s => s.direction === 'SOURCE_TO_TARGET' && s.originalSchema);
+    const tgtSchema = this.schemas.find(s => s.direction === 'TARGET_TO_SOURCE' && s.originalSchema);
+    this.autoMapSourceSpec = this.sourceSchemaInput?.trim() || srcSchema?.originalSchema || '';
+    this.autoMapTargetSpec = this.targetSchemaInput?.trim() || tgtSchema?.originalSchema || '';
+    this.showAutoMapApisModal = true;
+    this.cdr.detectChanges();
+  }
+
+  loadSampleSwaggersForAutoMap(): void {
+    this.autoMapSourceSpec = HOST_SYSTEM_A_SWAGGER;
+    this.autoMapTargetSpec = DESTINATION_SYSTEM_B_SWAGGER;
+    this.autoMapError = '';
+    this.cdr.detectChanges();
+  }
+
+  runAutoMatchApis(): void {
+    if (!this.selectedProject) return;
+    this.isAutoMatchingApis = true;
+    this.autoMapError = '';
+    this.autoMapStatusMessage = '';
+    this.api.autoMatchApiEndpoints(this.selectedProject.id, this.autoMapSourceSpec, this.autoMapTargetSpec).subscribe({
+      next: (pairs) => {
+        this.autoMatchedPairs = pairs || [];
+        this.isAutoMatchingApis = false;
+        this.cdr.detectChanges();
+      },
+      error: (err) => {
+        this.autoMapError = err?.error?.message || 'Failed to match endpoints. Ensure both Source and Target OpenAPI/Swagger specs are valid.';
+        this.isAutoMatchingApis = false;
+        this.cdr.detectChanges();
+      }
+    });
+  }
+
+  get selectedAutoMapCount(): number {
+    return this.autoMatchedPairs.filter(p => p.selected).length;
+  }
+
+  bulkRegisterSelectedApis(): void {
+    if (!this.selectedProject) return;
+    const selected = this.autoMatchedPairs.filter(p => p.selected);
+    if (selected.length === 0) return;
+
+    this.isBulkRegisteringApis = true;
+    this.autoMapError = '';
+    const srcBase = this.selectedProject.sourceSystemUrl || 'http://localhost:8080/mock/system-a';
+    const tgtBase = this.selectedProject.targetSystemUrl || 'http://localhost:8080/mock/system-b';
+
+    const requests = selected.map(p => ({
+      name: p.suggestedName || `${p.sourceMethod} ${p.sourcePath}`,
+      description: `Auto-mapped (${Math.round((p.confidence || 0) * 100)}%): ${p.sourceMethod} ${p.sourcePath} -> ${p.targetMethod} ${p.targetPath}`,
+      httpMethod: p.sourceMethod || 'POST',
+      endpointPath: p.sourcePath,
+      direction: 'SOURCE_TO_TARGET',
+      sourceUrl: srcBase + p.sourcePath,
+      targetUrl: tgtBase + (p.targetPath || p.sourcePath),
+      sourceSchema: p.sourceSampleJson || '{}',
+      targetSchema: p.targetSampleJson || '{}'
+    }));
+
+    this.api.bulkRegisterApis(this.selectedProject.id, requests).subscribe({
+      next: (res) => {
+        this.isBulkRegisteringApis = false;
+        const createdCount = res?.created?.length || 0;
+        const skippedCount = res?.skippedCount || 0;
+        this.autoMapStatusMessage = `Registered ${createdCount} API(s)` + (skippedCount > 0 ? ` (${skippedCount} already existed and were skipped)` : '') + '.';
+        this.loadApis(this.selectedProject!.id);
+        this.showAutoMapApisModal = false;
+        this.cdr.detectChanges();
+      },
+      error: (err) => {
+        this.autoMapError = err?.error?.message || 'Failed to register selected APIs.';
+        this.isBulkRegisteringApis = false;
+        this.cdr.detectChanges();
+      }
+    });
   }
 
   createApi(): void {
@@ -1331,20 +1478,207 @@ export class App implements OnInit {
   // Custom Mapping Rule Modal Operations
   openCustomRuleModal(): void {
     if (this.isSavingRules || this.isConvertingNl) return;
-    this.customRuleSourcePaths = this.sourceFields.length > 0 ? this.sourceFields[0].fieldPath : '';
-    this.customRuleTargetPath = this.targetFields.length > 0 ? this.targetFields[0].fieldPath : '';
+    // Leave inputs empty so placeholders guide the user without pre-filling orderId/sub_id
+    this.customRuleSourcePaths = '';
+    this.customRuleTargetPath = '';
     this.customRuleOperation = 'RENAME';
     this.customRuleParameterKey = '';
     this.customRuleParameterValue = '';
     this.customRuleExplanation = '';
+    this.customRuleError = '';
     this.showCustomRuleModal = true;
     this.cdr.detectChanges();
   }
 
-  saveCustomRule(): void {
-    if (!this.selectedProject || !this.customRuleTargetPath.trim() || this.isSavingRules || this.isConvertingNl) return;
+  onCustomOperationChange(): void {
+    this.customRuleError = '';
+    if (this.customRuleOperation === 'CONCAT' && !this.customRuleParameterKey) {
+      this.customRuleParameterKey = 'separator';
+    } else if (this.customRuleOperation === 'DATE_FORMAT' && !this.customRuleParameterKey) {
+      this.customRuleParameterKey = 'targetFormat';
+    } else if ((this.customRuleOperation === 'DEFAULT_VALUE' || this.customRuleOperation === 'CONSTANT_VALUE') && !this.customRuleParameterKey) {
+      this.customRuleParameterKey = 'value';
+    } else if (this.customRuleOperation === 'RENAME' || this.customRuleOperation === 'FLATTEN' || this.customRuleOperation === 'UPPERCASE' || this.customRuleOperation === 'LOWERCASE' || this.customRuleOperation === 'TRIM') {
+      this.customRuleParameterKey = '';
+      this.customRuleParameterValue = '';
+    }
+    this.cdr.detectChanges();
+  }
 
-    const sources = this.customRuleSourcePaths.split(',').map(s => s.trim()).filter(s => s.length > 0);
+  get parsedCustomSourceList(): string[] {
+    return this.customRuleSourcePaths
+      .split(/[,+]/)
+      .map(s => s.trim())
+      .filter(s => s.length > 0);
+  }
+
+  get customRuleValidationMessage(): string {
+    const sources = this.parsedCustomSourceList;
+    if (this.customRuleOperation === 'CONCAT' && sources.length < 2) {
+      return `CONCAT requires at least 2 source fields (e.g. "firstName, lastName" or "firstName + lastName"). Currently entered: ${sources.length}.`;
+    }
+    if (this.customRuleOperation !== 'CONSTANT_VALUE' && sources.length === 0) {
+      return 'Please enter at least 1 Source Field Path.';
+    }
+    if (!this.customRuleTargetPath.trim()) {
+      return 'Please enter a Target Field Path.';
+    }
+    return '';
+  }
+
+  get canSaveCustomRule(): boolean {
+    return this.customRuleValidationMessage === '';
+  }
+
+  get customOperationGuide(): {
+    hint: string;
+    sourcePlaceholder: string;
+    targetPlaceholder: string;
+    paramKeyPlaceholder: string;
+    paramValPlaceholder: string;
+    explanationPlaceholder: string;
+  } {
+    switch (this.customRuleOperation) {
+      case 'CONCAT':
+        return {
+          hint: 'CONCAT combines 2 or more source fields into 1 target field (requires at least 2 source fields).',
+          sourcePlaceholder: 'e.g. firstName, lastName  or  firstName + lastName',
+          targetPlaceholder: 'e.g. userName  or  fullName',
+          paramKeyPlaceholder: 'separator (optional, default is space " ")',
+          paramValPlaceholder: 'e.g. " " or " - " or "_"',
+          explanationPlaceholder: 'e.g. Combine firstName and lastName into userName'
+        };
+      case 'RENAME':
+        return {
+          hint: 'RENAME maps 1 source field directly to 1 target field.',
+          sourcePlaceholder: 'e.g. order_id  or  sub_id',
+          targetPlaceholder: 'e.g. orderId  or  subscriptionId',
+          paramKeyPlaceholder: 'Not required for RENAME',
+          paramValPlaceholder: 'Not required for RENAME',
+          explanationPlaceholder: 'e.g. Direct field rename from source to target'
+        };
+      case 'DATE_FORMAT':
+        return {
+          hint: 'DATE_FORMAT converts date strings (e.g. dd/MM/yyyy -> yyyy-MM-dd).',
+          sourcePlaceholder: 'e.g. dob  or  start_date',
+          targetPlaceholder: 'e.g. dateOfBirth  or  billingStartDate',
+          paramKeyPlaceholder: 'targetFormat',
+          paramValPlaceholder: 'e.g. yyyy-MM-dd  or  dd/MM/yyyy',
+          explanationPlaceholder: 'e.g. Convert slash date dd/MM/yyyy to ISO yyyy-MM-dd'
+        };
+      case 'STRING_TO_BOOLEAN':
+        return {
+          hint: 'STRING_TO_BOOLEAN converts "Yes"/"No", "1"/"0", or "true"/"false" strings into a native boolean.',
+          sourcePlaceholder: 'e.g. active  or  auto_renew',
+          targetPlaceholder: 'e.g. accountEnabled  or  autoRenewalEnabled',
+          paramKeyPlaceholder: 'trueValues (optional)',
+          paramValPlaceholder: 'e.g. Yes, Y, true, 1',
+          explanationPlaceholder: 'e.g. Convert "Yes"/"No" flag to boolean'
+        };
+      case 'STRING_TO_NUMBER':
+        return {
+          hint: 'STRING_TO_NUMBER converts numeric text ("250") into a native integer/decimal (250).',
+          sourcePlaceholder: 'e.g. seat_count  or  amount_str',
+          targetPlaceholder: 'e.g. licensedSeats  or  totalAmount',
+          paramKeyPlaceholder: 'Not required',
+          paramValPlaceholder: 'Not required',
+          explanationPlaceholder: 'e.g. Convert string number to integer'
+        };
+      case 'ENUM_MAP':
+        return {
+          hint: 'ENUM_MAP translates legacy status/tier codes into target system codes.',
+          sourcePlaceholder: 'e.g. tier  or  plan_code',
+          targetPlaceholder: 'e.g. membershipLevel  or  tierCode',
+          paramKeyPlaceholder: 'mappings',
+          paramValPlaceholder: 'e.g. GOLD_TIER:GLD, SILVER_TIER:SLV',
+          explanationPlaceholder: 'e.g. Map legacy tier code to 3-letter cloud enum'
+        };
+      case 'FLATTEN':
+        return {
+          hint: 'FLATTEN extracts a nested object property (e.g. contact.email) into a top-level target field.',
+          sourcePlaceholder: 'e.g. contact.email  or  admin.email',
+          targetPlaceholder: 'e.g. emailAddress  or  primaryContactEmail',
+          paramKeyPlaceholder: 'Not required',
+          paramValPlaceholder: 'Not required',
+          explanationPlaceholder: 'e.g. Flatten nested email into root target field'
+        };
+      case 'NEST':
+        return {
+          hint: 'NEST places a flat source field inside a nested target object path (e.g. contact.email).',
+          sourcePlaceholder: 'e.g. emailAddress',
+          targetPlaceholder: 'e.g. contact.email',
+          paramKeyPlaceholder: 'Not required',
+          paramValPlaceholder: 'Not required',
+          explanationPlaceholder: 'e.g. Nest flat email field inside contact object'
+        };
+      case 'DEFAULT_VALUE':
+        return {
+          hint: 'DEFAULT_VALUE uses the source field if present, or falls back to a default value when null/empty.',
+          sourcePlaceholder: 'e.g. tier  or  status',
+          targetPlaceholder: 'e.g. membershipLevel  or  accountStatus',
+          paramKeyPlaceholder: 'defaultValue',
+          paramValPlaceholder: 'e.g. STANDARD  or  N/A',
+          explanationPlaceholder: 'e.g. Supply fallback default when source is empty'
+        };
+      case 'CONSTANT_VALUE':
+        return {
+          hint: 'CONSTANT_VALUE sets the target field to a fixed constant value regardless of source input.',
+          sourcePlaceholder: 'Optional (*)',
+          targetPlaceholder: 'e.g. tenantSource  or  region',
+          paramKeyPlaceholder: 'value',
+          paramValPlaceholder: 'e.g. OPENTEXT_CLOUD',
+          explanationPlaceholder: 'e.g. Set static constant value on target field'
+        };
+      default:
+        return {
+          hint: `${this.customRuleOperation} transforms source field(s) into the target field.`,
+          sourcePlaceholder: 'e.g. sourceField',
+          targetPlaceholder: 'e.g. targetField',
+          paramKeyPlaceholder: 'e.g. separator or targetFormat',
+          paramValPlaceholder: 'e.g. " " or yyyy-MM-dd',
+          explanationPlaceholder: `e.g. Apply ${this.customRuleOperation} rule`
+        };
+    }
+  }
+
+  toggleCustomSourceField(fieldPath: string): void {
+    this.customRuleError = '';
+    const current = this.parsedCustomSourceList;
+
+    if (this.customRuleOperation === 'CONCAT') {
+      const idx = current.indexOf(fieldPath);
+      if (idx >= 0) {
+        current.splice(idx, 1);
+      } else {
+        current.push(fieldPath);
+      }
+      this.customRuleSourcePaths = current.join(', ');
+    } else {
+      // Single-field operation: clicking same chip unselects it; clicking another chip replaces it
+      if (current.length === 1 && current[0] === fieldPath) {
+        this.customRuleSourcePaths = '';
+      } else {
+        this.customRuleSourcePaths = fieldPath;
+      }
+    }
+    this.cdr.detectChanges();
+  }
+
+  isCustomSourceSelected(fieldPath: string): boolean {
+    return this.parsedCustomSourceList.includes(fieldPath);
+  }
+
+  saveCustomRule(): void {
+    if (!this.selectedProject || this.isSavingRules || this.isConvertingNl) return;
+
+    const validationMsg = this.customRuleValidationMessage;
+    if (validationMsg) {
+      this.customRuleError = validationMsg;
+      this.cdr.detectChanges();
+      return;
+    }
+    this.customRuleError = '';
+    const sources = this.parsedCustomSourceList;
     const params: Record<string, any> = {};
     if (this.customRuleParameterKey && this.customRuleParameterValue) {
       params[this.customRuleParameterKey] = this.customRuleParameterValue;

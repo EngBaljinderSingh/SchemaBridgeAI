@@ -25,6 +25,7 @@ public class RegisteredApiService {
 
     private final RegisteredApiRepository apiRepository;
     private final IntegrationProjectRepository projectRepository;
+    private final ProjectService projectService;
     private final SchemaExtractionService extractionService;
     private final MatchingPipeline matchingPipeline;
     private final TransformationEngine transformationEngine;
@@ -35,6 +36,7 @@ public class RegisteredApiService {
     public RegisteredApiService(
             RegisteredApiRepository apiRepository,
             IntegrationProjectRepository projectRepository,
+            ProjectService projectService,
             SchemaExtractionService extractionService,
             MatchingPipeline matchingPipeline,
             TransformationEngine transformationEngine,
@@ -43,6 +45,7 @@ public class RegisteredApiService {
             ObjectMapper objectMapper) {
         this.apiRepository = apiRepository;
         this.projectRepository = projectRepository;
+        this.projectService = projectService;
         this.extractionService = extractionService;
         this.matchingPipeline = matchingPipeline;
         this.transformationEngine = transformationEngine;
@@ -198,6 +201,254 @@ public class RegisteredApiService {
             resp.put("resolutionHint", logDto.getResolutionHint());
         }
         return resp;
+    }
+
+    /**
+     * Auto-matches API endpoints between System A (source) and System B (target) OpenAPI/Swagger specs.
+     */
+    public List<AutoMappedApiPairDto> autoMatchEndpoints(String projectId, AutoMatchEndpointsRequest req) {
+        projectRepository.findById(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Project", projectId));
+
+        String srcSpec = req != null ? req.getSourceSpec() : null;
+        String tgtSpec = req != null ? req.getTargetSpec() : null;
+
+        if ((srcSpec == null || srcSpec.isBlank()) || (tgtSpec == null || tgtSpec.isBlank())) {
+            List<SchemaResponse> schemas = projectService.getSchemasByProject(projectId);
+            for (SchemaResponse s : schemas) {
+                if ((srcSpec == null || srcSpec.isBlank()) && s.getDirection() == Direction.SOURCE_TO_TARGET
+                        && s.getOriginalSchema() != null && !s.getOriginalSchema().isBlank()) {
+                    srcSpec = s.getOriginalSchema();
+                }
+                if ((tgtSpec == null || tgtSpec.isBlank()) && s.getDirection() == Direction.TARGET_TO_SOURCE
+                        && s.getOriginalSchema() != null && !s.getOriginalSchema().isBlank()) {
+                    tgtSpec = s.getOriginalSchema();
+                }
+            }
+        }
+
+        if (srcSpec == null || srcSpec.isBlank()) {
+            throw new ValidationException("Source Swagger/OpenAPI specification is required.");
+        }
+        if (tgtSpec == null || tgtSpec.isBlank()) {
+            throw new ValidationException("Target Swagger/OpenAPI specification is required.");
+        }
+
+        List<ApiEndpointSummaryDto> sourceEndpoints = extractionService.extractEndpointsFromSpec(srcSpec);
+        List<ApiEndpointSummaryDto> targetEndpoints = extractionService.extractEndpointsFromSpec(tgtSpec);
+
+        if (sourceEndpoints.isEmpty()) {
+            throw new ValidationException("No API endpoints found in Source Swagger/OpenAPI spec.");
+        }
+        if (targetEndpoints.isEmpty()) {
+            throw new ValidationException("No API endpoints found in Target Swagger/OpenAPI spec.");
+        }
+
+        List<AutoMappedApiPairDto> results = new ArrayList<>();
+        Set<Integer> usedTargetIndices = new HashSet<>();
+
+        for (ApiEndpointSummaryDto src : sourceEndpoints) {
+            int bestIdx = -1;
+            double bestScore = -1.0;
+            String bestReason = "Unmatched — please select target endpoint";
+
+            for (int i = 0; i < targetEndpoints.size(); i++) {
+                ApiEndpointSummaryDto tgt = targetEndpoints.get(i);
+                EndpointScore score = scoreEndpointPair(src, tgt, usedTargetIndices.contains(i));
+                if (score.score() > bestScore) {
+                    bestScore = score.score();
+                    bestIdx = i;
+                    bestReason = score.reason();
+                }
+            }
+
+            ApiEndpointSummaryDto matchedTgt = bestIdx >= 0 ? targetEndpoints.get(bestIdx) : targetEndpoints.get(0);
+            if (bestIdx >= 0 && bestScore >= 0.55) {
+                usedTargetIndices.add(bestIdx);
+            }
+
+            double clampedScore = Math.max(0.25, Math.min(0.99, Math.round(bestScore * 100.0) / 100.0));
+            boolean reviewNeeded = clampedScore < 0.85;
+
+            String srcSample = buildSampleJsonForEndpoint(srcSpec, src.getEndpointPath());
+            String tgtSample = buildSampleJsonForEndpoint(tgtSpec, matchedTgt.getEndpointPath());
+
+            String suggestedName = (src.getSummary() != null && !src.getSummary().isBlank())
+                    ? src.getSummary()
+                    : (src.getHttpMethod() + " " + src.getEndpointPath());
+
+            results.add(AutoMappedApiPairDto.builder()
+                    .sourceMethod(src.getHttpMethod())
+                    .sourcePath(src.getEndpointPath())
+                    .sourceSummary(src.getSummary())
+                    .sourceModelName(src.getSchemaModelName())
+                    .targetMethod(matchedTgt.getHttpMethod())
+                    .targetPath(matchedTgt.getEndpointPath())
+                    .targetSummary(matchedTgt.getSummary())
+                    .targetModelName(matchedTgt.getSchemaModelName())
+                    .suggestedName(suggestedName)
+                    .confidence(clampedScore)
+                    .matchReason(bestReason)
+                    .requiresReview(reviewNeeded)
+                    .selected(clampedScore >= 0.55)
+                    .sourceSampleJson(srcSample)
+                    .targetSampleJson(tgtSample)
+                    .build());
+        }
+
+        return results;
+    }
+
+    /**
+     * Bulk-registers approved API endpoint pairs under the project, skipping duplicates.
+     */
+    @Transactional
+    public BulkRegisterApisResponse bulkRegisterApis(String projectId, List<ApiCreateRequest> requests) {
+        IntegrationProject project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Project", projectId));
+
+        List<RegisteredApi> existing = apiRepository.findByProjectIdOrderByCreatedAtAsc(projectId);
+        Set<String> existingKeys = new HashSet<>();
+        for (RegisteredApi e : existing) {
+            existingKeys.add((e.getHttpMethod() + "::" + e.getEndpointPath()).toUpperCase());
+        }
+
+        List<RegisteredApiDto> created = new ArrayList<>();
+        int skipped = 0;
+
+        for (ApiCreateRequest req : requests) {
+            String method = (req.getHttpMethod() != null ? req.getHttpMethod().toUpperCase() : "POST").trim();
+            String path = req.getEndpointPath() != null ? req.getEndpointPath().trim() : "/";
+            if (!path.startsWith("/")) path = "/" + path;
+
+            String key = (method + "::" + path).toUpperCase();
+            if (existingKeys.contains(key)) {
+                skipped++;
+                continue;
+            }
+            existingKeys.add(key);
+            created.add(createApi(projectId, req));
+        }
+
+        auditService.recordEvent("RegisteredApi", projectId, "BULK_REGISTER", "system", null,
+                "Auto-registered " + created.size() + " APIs from Swagger under " + project.getName() + " (skipped " + skipped + ")");
+
+        return BulkRegisterApisResponse.builder()
+                .created(created)
+                .skippedCount(skipped)
+                .build();
+    }
+
+    private record EndpointScore(double score, String reason) {}
+
+    private EndpointScore scoreEndpointPair(ApiEndpointSummaryDto src, ApiEndpointSummaryDto tgt, boolean alreadyUsed) {
+        String sMethod = src.getHttpMethod() != null ? src.getHttpMethod().toUpperCase() : "";
+        String tMethod = tgt.getHttpMethod() != null ? tgt.getHttpMethod().toUpperCase() : "";
+        String sPath = src.getEndpointPath() != null ? src.getEndpointPath() : "";
+        String tPath = tgt.getEndpointPath() != null ? tgt.getEndpointPath() : "";
+
+        if (sMethod.equals(tMethod) && sPath.equalsIgnoreCase(tPath)) {
+            return new EndpointScore(0.99, "Exact HTTP method & path match");
+        }
+
+        double score = 0.0;
+        List<String> reasons = new ArrayList<>();
+
+        if (sMethod.equals(tMethod)) {
+            score += 0.40;
+            reasons.add("Same HTTP " + sMethod);
+        } else {
+            score += 0.05;
+        }
+
+        Set<String> sTokens = tokenizeEndpoint(src);
+        Set<String> tTokens = tokenizeEndpoint(tgt);
+        if (!sTokens.isEmpty() && !tTokens.isEmpty()) {
+            Set<String> intersection = new HashSet<>(sTokens);
+            intersection.retainAll(tTokens);
+            Set<String> union = new HashSet<>(sTokens);
+            union.addAll(tTokens);
+            double jaccard = (double) intersection.size() / union.size();
+            score += jaccard * 0.55;
+            if (!intersection.isEmpty()) {
+                reasons.add("Shared domain terms: " + String.join(", ", intersection));
+            }
+        }
+
+        // Parameter-count parity bonus (e.g. /{id} <-> /{subscriptionId})
+        boolean sHasParam = sPath.contains("{");
+        boolean tHasParam = tPath.contains("{");
+        if (sHasParam == tHasParam) {
+            score += 0.05;
+        }
+
+        if (alreadyUsed) {
+            score -= 0.15;
+        }
+
+        String reasonText = reasons.isEmpty() ? "Low semantic overlap" : String.join(" + ", reasons);
+        return new EndpointScore(score, reasonText);
+    }
+
+    private Set<String> tokenizeEndpoint(ApiEndpointSummaryDto ep) {
+        String combined = String.join(" ",
+                ep.getEndpointPath() != null ? ep.getEndpointPath() : "",
+                ep.getOperationId() != null ? ep.getOperationId() : "",
+                ep.getSummary() != null ? ep.getSummary() : "",
+                ep.getSchemaModelName() != null ? ep.getSchemaModelName() : "");
+
+        String splitCamel = combined.replaceAll("([a-z])([A-Z])", "$1 $2");
+        String[] raw = splitCamel.toLowerCase().split("[^a-z0-9]+");
+
+        Map<String, String> synonyms = Map.ofEntries(
+                Map.entry("sub", "subscription"),
+                Map.entry("subs", "subscription"),
+                Map.entry("subscriptions", "subscription"),
+                Map.entry("acct", "account"),
+                Map.entry("accounts", "account"),
+                Map.entry("cust", "customer"),
+                Map.entry("customers", "customer"),
+                Map.entry("ord", "order"),
+                Map.entry("orders", "order"),
+                Map.entry("inv", "invoice"),
+                Map.entry("invoices", "invoice"),
+                Map.entry("prod", "product"),
+                Map.entry("products", "product"),
+                Map.entry("usr", "user"),
+                Map.entry("users", "user")
+        );
+        Set<String> stopWords = Set.of("api", "v1", "v2", "v3", "se", "cm3", "legacy", "cloud", "erp", "pos", "inlinepayload", "id", "get", "post", "put", "create", "update", "fetch", "read");
+
+        Set<String> tokens = new LinkedHashSet<>();
+        for (String w : raw) {
+            if (w.length() < 2 || stopWords.contains(w)) continue;
+            tokens.add(synonyms.getOrDefault(w, w));
+        }
+        return tokens;
+    }
+
+    private String buildSampleJsonForEndpoint(String spec, String endpointPath) {
+        try {
+            List<FieldExtractionDto> fields = extractionService.extractFieldsForEndpoints(spec, List.of(endpointPath));
+            Map<String, Object> sample = new LinkedHashMap<>();
+            for (FieldExtractionDto f : fields) {
+                if (f.getFieldPath() == null || f.getFieldPath().contains(".")) continue;
+                Object val = f.getSampleValue();
+                if (val == null || val.toString().isBlank()) {
+                    String dt = f.getDataType() != null ? f.getDataType().toUpperCase() : "STRING";
+                    val = switch (dt) {
+                        case "NUMBER", "INTEGER" -> 100;
+                        case "BOOLEAN" -> true;
+                        case "DATE" -> "2026-11-16";
+                        default -> "sample_" + f.getFieldPath();
+                    };
+                }
+                sample.put(f.getFieldPath(), val);
+            }
+            return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(sample);
+        } catch (Exception e) {
+            return "{}";
+        }
     }
 
     private RegisteredApiDto toDto(RegisteredApi a) {

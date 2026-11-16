@@ -219,6 +219,17 @@ export class ApiService {
     return this.http.post<any>(`${this.baseUrl}/projects/${projectId}/apis/${apiId}/transform`, payload);
   }
 
+  autoMatchApiEndpoints(projectId: string, sourceSpec?: string, targetSpec?: string): Observable<any[]> {
+    return this.http.post<any[]>(`${this.baseUrl}/projects/${projectId}/apis/auto-match`, {
+      sourceSpec: sourceSpec || null,
+      targetSpec: targetSpec || null
+    });
+  }
+
+  bulkRegisterApis(projectId: string, requests: any[]): Observable<{ created: any[]; skippedCount: number }> {
+    return this.http.post<{ created: any[]; skippedCount: number }>(`${this.baseUrl}/projects/${projectId}/apis/bulk-register`, requests);
+  }
+
   // 3-URL Live Gateway & Execution/Error Telemetry Endpoints
   getGatewayLogs(projectId: string): Observable<any[]> {
     return this.http.get<any[]>(`${this.baseUrl}/projects/${projectId}/gateway/logs`);

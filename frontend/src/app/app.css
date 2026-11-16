@@ -456,3 +456,78 @@
 .method-put { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
 .method-delete { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
 .method-patch { background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3); }
+
+/* Light Theme Component Overrides */
+:host-context(body.light-theme) .app-header {
+  background: rgba(255, 255, 255, 0.92);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.1);
+}
+:host-context(body.light-theme) .brand-title {
+  background: linear-gradient(135deg, #0f172a 40%, #4f46e5 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+:host-context(body.light-theme) .nav-tabs {
+  background: #f1f5f9;
+  border-color: rgba(15, 23, 42, 0.1);
+}
+:host-context(body.light-theme) .nav-tab-btn:hover {
+  color: #0f172a;
+  background: rgba(15, 23, 42, 0.06);
+}
+:host-context(body.light-theme) .nav-tab-btn.active {
+  color: #ffffff;
+}
+:host-context(body.light-theme) .aviator-status-pill {
+  background: rgba(2, 132, 199, 0.1);
+  border-color: rgba(2, 132, 199, 0.3);
+  color: #0369a1;
+}
+:host-context(body.light-theme) .field-card {
+  background: #f8fafc;
+  border-color: rgba(15, 23, 42, 0.1);
+}
+:host-context(body.light-theme) .field-card:hover {
+  background: #f1f5f9;
+}
+:host-context(body.light-theme) .mapping-rule-card {
+  background: #ffffff;
+  border-color: rgba(15, 23, 42, 0.12);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+}
+:host-context(body.light-theme) .source-tag {
+  background: rgba(79, 70, 229, 0.12);
+  color: #3730a3;
+}
+:host-context(body.light-theme) .target-tag {
+  background: rgba(2, 132, 199, 0.12);
+  color: #075985;
+}
+:host-context(body.light-theme) .rule-explanation {
+  background: #f8fafc;
+  color: #334155;
+}
+:host-context(body.light-theme) .filter-btn {
+  background: #f1f5f9;
+  color: #334155;
+}
+:host-context(body.light-theme) .filter-btn.active {
+  background: var(--accent-primary);
+  color: #ffffff;
+}
+:host-context(body.light-theme) .modal-content {
+  background: #ffffff;
+  border-color: rgba(15, 23, 42, 0.15);
+}
+:host-context(body.light-theme) .endpoint-table th {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+:host-context(body.light-theme) .endpoint-table td {
+  border-bottom-color: rgba(15, 23, 42, 0.08);
+}
+:host-context(body.light-theme) .theme-toggle-btn {
+  background: #f1f5f9;
+  border-color: rgba(15, 23, 42, 0.15);
+  color: #0f172a;
+}

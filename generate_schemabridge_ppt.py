@@ -1,4 +1,4 @@
-"""Generate 'SchemaBridge AI Aviator.pptx' using the OpenText Aviator master template."""
+"""Generate executive 'SchemaBridge AI Aviator.pptx' positioned as Agentic Enterprise Integration Accelerator."""
 
 from __future__ import annotations
 
@@ -10,41 +10,29 @@ from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.util import Inches, Pt
 
 ROOT = Path(__file__).resolve().parent
-TEMPLATE_PPTX = Path(r"C:\Users\baljinders\Documents\GitHub\AutoVerbum\CC4E Aviator.pptx")
-FALLBACK_TEMPLATE_PPTX = Path(r"C:\Users\baljinders\Documents\GitHub\AutoVerbum\QE Agent Aviator.pptx")
+BASE_PPTX = ROOT / "SchemaBridge AI Aviator.pptx"
 OUTPUT_PPTX = ROOT / "SchemaBridge AI Aviator.pptx"
 
-SCREENSHOT_MAPPING = Path(
-    r"C:/Users/baljinders/.gemini/antigravity/brain/00302878-1269-4261-80d4-f9ff35bac9f3/.user_uploaded/media_1794747428876_d19b37e7.jpg"
-)
-SCREENSHOT_APPS = Path(
-    r"C:/Users/baljinders/.gemini/antigravity/brain/00302878-1269-4261-80d4-f9ff35bac9f3/.user_uploaded/media_1794747445408_c73838a5.jpg"
-)
+UPLOAD_DIR = Path(r"C:/Users/baljinders/.gemini/antigravity/brain/00302878-1269-4261-80d4-f9ff35bac9f3/.user_uploaded")
+IMG_GATEWAY_6CASES = UPLOAD_DIR / "media_1794822702836_de1f4239.jpg"
+IMG_MAPPING_WORKSPACE = UPLOAD_DIR / "media_1794822766024_0c0ca0ae.jpg"
+IMG_TRANSFORM_LAB = UPLOAD_DIR / "media_1794822817232_afa558ac.jpg"
 
-# OpenText Theme Palette (from CC4E Aviator.pptx / QE Agent Aviator.pptx theme1.xml)
-OT_NAVY = RGBColor(0x00, 0x00, 0x8A)       # accent1: #00008A
-OT_BLUE = RGBColor(0x19, 0x68, 0xFF)       # accent2: #1968FF
-OT_DARK_NAVY = RGBColor(0x00, 0x1C, 0x50)  # accent6: #001C50
-OT_SLATE = RGBColor(0x66, 0x67, 0x7B)      # accent3: #66677B
-OT_LIGHT_GRAY = RGBColor(0xE7, 0xE9, 0xEC) # accent4: #E7E9EC
+# OpenText Theme Palette
+OT_NAVY = RGBColor(0x00, 0x00, 0x8A)       # #00008A
+OT_BLUE = RGBColor(0x19, 0x68, 0xFF)       # #1968FF
+OT_DARK_NAVY = RGBColor(0x00, 0x1C, 0x50)  # #001C50
+OT_SLATE = RGBColor(0x66, 0x67, 0x7B)      # #66677B
+OT_LIGHT_GRAY = RGBColor(0xE7, 0xE9, 0xEC) # #E7E9EC
 OT_SOFT_BG = RGBColor(0xF4, 0xF6, 0xFA)    # subtle card fill
-OT_GOLD = RGBColor(0xE1, 0xBB, 0x35)       # accent5: #E1BB35
-OT_TEAL = RGBColor(0x0D, 0x94, 0x88)       # success/healing accent
-OT_CHARCOAL = RGBColor(0x37, 0x38, 0x48)   # lt2: #373848
-OT_RED = RGBColor(0x99, 0x1B, 0x1B)        # alert/problem accent
-OT_AMBER = RGBColor(0xB4, 0x53, 0x09)      # warning/fallback accent
+OT_GOLD = RGBColor(0xE1, 0xBB, 0x35)       # #E1BB35
+OT_TEAL = RGBColor(0x0D, 0x94, 0x88)       # #0D9488
+OT_CHARCOAL = RGBColor(0x37, 0x38, 0x48)   # #373848
+OT_RED = RGBColor(0x99, 0x1B, 0x1B)        # #991B1B
 OT_WHITE = RGBColor(0xFF, 0xFF, 0xFF)
 
 
-def clear_slides(prs: Presentation) -> None:
-    while len(prs.slides) > 0:
-        r_id = prs.slides._sldIdLst[0].rId
-        prs.part.drop_rel(r_id)
-        del prs.slides._sldIdLst[0]
-
-
 def update_master_footer_year(prs: Presentation, old_year: str = "2025", new_year: str = "2026") -> None:
-    """Update copyright footer text across all slide masters and slide layouts."""
     for master in prs.slide_masters:
         for shape in master.shapes:
             if shape.has_text_frame:
@@ -75,6 +63,83 @@ def remove_placeholder(slide, idx: int) -> None:
             sp.getparent().remove(sp)
 
 
+def set_notes(slide, notes_text: str) -> None:
+    notes_slide = slide.notes_slide
+    tf = notes_slide.notes_text_frame
+    tf.text = notes_text.strip()
+
+
+def sanitize_backup_slide(slide, title_prefix: str = "Backup: ") -> None:
+    replacements = [
+        ("GDPR, HIPAA, PCI safe", "supports enterprise data-privacy and regulatory requirements"),
+        ("GDPR / HIPAA / PCI", "enterprise data-privacy and regulatory requirements"),
+        ("GDPR, HIPAA, PCI", "enterprise data-privacy and regulatory requirements"),
+        ("(Patent-Pending)", ""),
+        ("Patent-Pending", ""),
+        ("patent-pending", ""),
+        ("Patent Disclosure", "Architecture Overview"),
+        ("patent disclosure", "architecture overview"),
+        ("Patent", "IP"),
+        ("patent", "IP"),
+        ("Zero hallucination guarantee", "Zero-guessing policy in production (deterministic runtime)"),
+        ("zero hallucination guarantee", "zero-guessing policy in production (deterministic runtime)"),
+        ("100% deterministic", "deterministic"),
+        ("100% Privacy", "Privacy-by-Architecture (Zero Runtime PII Exposure to AI)"),
+        ("100% Data Privacy", "Privacy-by-Architecture (Zero Runtime PII Exposure to AI)"),
+        ("100% data privacy", "privacy-by-architecture (zero runtime PII exposure to AI)"),
+        ("baljinders@opentext.com", "designated engineering approver"),
+    ]
+
+    def walk_shapes(shapes):
+        for sh in shapes:
+            if sh.has_text_frame:
+                for p in sh.text_frame.paragraphs:
+                    for r in p.runs:
+                        txt = r.text
+                        for old, new in replacements:
+                            if old in txt:
+                                txt = txt.replace(old, new)
+                        r.text = txt
+            if sh.has_table:
+                for row in sh.table.rows:
+                    for cell in row.cells:
+                        for p in cell.text_frame.paragraphs:
+                            for r in p.runs:
+                                txt = r.text
+                                for old, new in replacements:
+                                    if old in txt:
+                                        txt = txt.replace(old, new)
+                                r.text = txt
+            if hasattr(sh, "shapes"):
+                walk_shapes(sh.shapes)
+
+    walk_shapes(slide.shapes)
+
+    for sh in slide.placeholders:
+        if sh.placeholder_format.idx == 0 and sh.has_text_frame:
+            t = sh.text_frame.text.strip()
+            if t and not t.startswith(title_prefix):
+                sh.text = f"{title_prefix}{t}"
+            break
+
+
+def reorder_and_prune_slides(prs: Presentation, keep_indices_in_order: list[int]) -> None:
+    sldIdLst = prs.slides._sldIdLst
+    all_els = list(sldIdLst)
+    keep_set = set(keep_indices_in_order)
+
+    for idx, el in enumerate(all_els):
+        if idx not in keep_set:
+            prs.part.drop_rel(el.rId)
+            sldIdLst.remove(el)
+
+    ordered_els = [all_els[idx] for idx in keep_indices_in_order]
+    for el in ordered_els:
+        sldIdLst.remove(el)
+    for el in ordered_els:
+        sldIdLst.append(el)
+
+
 def add_card(
     slide,
     left: float,
@@ -86,10 +151,9 @@ def add_card(
     header_color: RGBColor = OT_NAVY,
     fill_color: RGBColor = OT_SOFT_BG,
     border_color: RGBColor = OT_LIGHT_GRAY,
-    title_size: float = 13,
-    body_size: float = 10.5,
+    title_size: float = 11.8,
+    body_size: float = 9.2,
 ) -> None:
-    # Card body
     body_shape = slide.shapes.add_shape(
         MSO_SHAPE.ROUNDED_RECTANGLE,
         Inches(left),
@@ -103,8 +167,7 @@ def add_card(
     body_shape.line.color.rgb = border_color
     body_shape.line.width = Pt(1)
 
-    # Header bar
-    hdr_h = 0.44
+    hdr_h = 0.38
     hdr_shape = slide.shapes.add_shape(
         MSO_SHAPE.ROUND_2_SAME_RECTANGLE,
         Inches(left),
@@ -129,12 +192,11 @@ def add_card(
     p_h.font.bold = True
     p_h.font.color.rgb = OT_WHITE
 
-    # Content text box
     tb = slide.shapes.add_textbox(
         Inches(left + 0.12),
-        Inches(top + hdr_h + 0.08),
+        Inches(top + hdr_h + 0.05),
         Inches(width - 0.24),
-        Inches(height - hdr_h - 0.14),
+        Inches(height - hdr_h - 0.09),
     )
     tf = tb.text_frame
     tf.word_wrap = True
@@ -144,7 +206,7 @@ def add_card(
 
     for i, item in enumerate(bullets):
         p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
-        p.space_after = Pt(5)
+        p.space_after = Pt(3.5)
         if ":" in item and not item.startswith("http"):
             prefix, rest = item.split(":", 1)
             r1 = p.add_run()
@@ -176,7 +238,7 @@ def add_banner(
     text: str,
     bg_color: RGBColor = OT_DARK_NAVY,
     fg_color: RGBColor = OT_WHITE,
-    font_size: float = 11.5,
+    font_size: float = 10.4,
 ) -> None:
     box = slide.shapes.add_shape(
         MSO_SHAPE.ROUNDED_RECTANGLE,
@@ -192,8 +254,8 @@ def add_banner(
     tf = box.text_frame
     tf.word_wrap = True
     tf.vertical_anchor = MSO_ANCHOR.MIDDLE
-    tf.margin_left = Inches(0.18)
-    tf.margin_right = Inches(0.18)
+    tf.margin_left = Inches(0.16)
+    tf.margin_right = Inches(0.16)
     p = tf.paragraphs[0]
     p.text = text
     p.font.name = "Arial"
@@ -212,8 +274,8 @@ def add_pill_box(
     subtitle: str = "",
     fill_color: RGBColor = OT_BLUE,
     text_color: RGBColor = OT_WHITE,
-    title_size: float = 11,
-    sub_size: float = 9,
+    title_size: float = 9.4,
+    sub_size: float = 8.0,
 ) -> None:
     shape = slide.shapes.add_shape(
         MSO_SHAPE.ROUNDED_RECTANGLE,
@@ -229,8 +291,8 @@ def add_pill_box(
     tf = shape.text_frame
     tf.word_wrap = True
     tf.vertical_anchor = MSO_ANCHOR.MIDDLE
-    tf.margin_left = Inches(0.08)
-    tf.margin_right = Inches(0.08)
+    tf.margin_left = Inches(0.06)
+    tf.margin_right = Inches(0.06)
 
     p = tf.paragraphs[0]
     p.alignment = PP_ALIGN.CENTER
@@ -243,774 +305,496 @@ def add_pill_box(
     if subtitle:
         p2 = tf.add_paragraph()
         p2.alignment = PP_ALIGN.CENTER
-        p2.space_before = Pt(2)
+        p2.space_before = Pt(1.5)
         p2.text = subtitle
         p2.font.name = "Arial"
         p2.font.size = Pt(sub_size)
         p2.font.color.rgb = text_color
 
 
+def add_framed_screenshot(
+    slide,
+    image_path: Path,
+    left: float,
+    top: float,
+    frame_w: float,
+    frame_h: float,
+    border_color: RGBColor = OT_BLUE,
+) -> None:
+    if not image_path.is_file():
+        return
+    frame = slide.shapes.add_shape(
+        MSO_SHAPE.ROUNDED_RECTANGLE,
+        Inches(left),
+        Inches(top),
+        Inches(frame_w),
+        Inches(frame_h),
+    )
+    frame.adjustments[0] = 0.02
+    frame.fill.solid()
+    frame.fill.fore_color.rgb = OT_WHITE
+    frame.line.color.rgb = border_color
+    frame.line.width = Pt(1.5)
+
+    slide.shapes.add_picture(
+        str(image_path),
+        Inches(left + 0.07),
+        Inches(top + 0.07),
+        width=Inches(frame_w - 0.14),
+    )
+
+
+def add_comparison_table(slide, left: float, top: float, width: float, height: float) -> None:
+    rows_data = [
+        ("Dimension", "Traditional Integration", "SchemaBridge AI"),
+        ("Time to Go-Live", "Weeks of custom analysis, coding, testing & deployment", "AI-assisted onboarding (~10 min demonstrated vs. 3–4 wks estimated)"),
+        ("New Integration Cost", "Build, deploy, and maintain another custom adapter/service", "Configure and govern a versioned integration contract"),
+        ("Runtime", "Custom middleware / potential runtime processing overhead", "Deterministic Java, demonstrated <5 ms transformation"),
+        ("API Change", "Analyze code -> modify -> rebuild -> regression test -> redeploy", "Detect contract drift -> identify impacted mappings -> review -> republish"),
+        ("Data Privacy", "Runtime AI approaches may expose live payloads to LLMs", "Zero production LLM calls (no live customer payload sent to AI)"),
+        ("Debugging", "Trace custom services, transformation code, and scattered logs", "Centralized validation, correlation IDs & transformation visibility"),
+        ("Maintenance", "Frameworks, libraries & service lifecycle per custom adapter", "Shared gateway + versioned integration contracts"),
+    ]
+
+    table_shape = slide.shapes.add_table(len(rows_data), 3, Inches(left), Inches(top), Inches(width), Inches(height))
+    table = table_shape.table
+    table.columns[0].width = Inches(2.10)
+    table.columns[1].width = Inches(4.85)
+    table.columns[2].width = Inches(5.03)
+
+    for r_idx, (col0, col1, col2) in enumerate(rows_data):
+        is_hdr = r_idx == 0
+        for c_idx, val in enumerate([col0, col1, col2]):
+            cell = table.cell(r_idx, c_idx)
+            cell.vertical_anchor = MSO_ANCHOR.MIDDLE
+            cell.margin_left = Inches(0.10)
+            cell.margin_right = Inches(0.10)
+            cell.margin_top = Inches(0.05)
+            cell.margin_bottom = Inches(0.05)
+            cell.fill.solid()
+            if is_hdr:
+                cell.fill.fore_color.rgb = OT_NAVY if c_idx < 2 else OT_TEAL
+            else:
+                cell.fill.fore_color.rgb = OT_SOFT_BG if r_idx % 2 == 1 else OT_WHITE
+
+            tf = cell.text_frame
+            tf.word_wrap = True
+            p = tf.paragraphs[0]
+            p.text = val
+            p.font.name = "Arial"
+            p.font.size = Pt(10.2 if is_hdr else 9.2)
+            p.font.bold = is_hdr or c_idx == 0
+            if is_hdr:
+                p.font.color.rgb = OT_WHITE
+            elif c_idx == 0:
+                p.font.color.rgb = OT_DARK_NAVY
+            elif c_idx == 2:
+                p.font.color.rgb = OT_DARK_NAVY
+            else:
+                p.font.color.rgb = OT_CHARCOAL
+
+
 def build_presentation() -> Path:
-    tpl = TEMPLATE_PPTX if TEMPLATE_PPTX.is_file() else FALLBACK_TEMPLATE_PPTX
-    prs = Presentation(str(tpl))
-    clear_slides(prs)
+    prs = Presentation(str(BASE_PPTX))
     update_master_footer_year(prs, "2025", "2026")
 
+    old_count = len(prs.slides)  # 16 slides in SchemaBridge AI Aviatorold.pptx (0..15)
     layouts = prs.slide_layouts
-    L_COVER = layouts[0]      # 'Cover'
-    L_DIVIDER = layouts[1]    # 'Divider 2'
-    L_TITLE_BODY = layouts[3] # 'Title | Body'
-    L_BACK = layouts[28]      # 'Back cover'
+    L_COVER = layouts[0]       # 'Cover'
+    L_TITLE_BODY = layouts[3]  # 'Title | Body'
+    L_BACK = layouts[28]       # 'Back cover'
 
     # =========================================================================
-    # SLIDE 1: Cover (Layout: Cover)
+    # SLIDE 1: Cover Slide
     # =========================================================================
     s1 = prs.slides.add_slide(L_COVER)
     s1.placeholders[10].text = "SchemaBridge AI"
-    s1.placeholders[11].text = "Aviator-Powered Intelligent Schema & Payload Translation Platform"
+    s1.placeholders[11].text = "Agentic Enterprise Integration Accelerator"
     s1.placeholders[12].text = (
-        "Baljinder Singh, Integration & Platform Engineering\n"
-        "Powered by OpenText Aviator ADT  |  AI-Advisory Design Time · Zero-AI <5ms Deterministic Runtime"
+        "Baljinder Singh  |  Powered by OpenText Aviator ADT  |  Coding & Integration Automation\n"
+        "AI Designs the Integration  ·  Deterministic Java Runs It (<5 ms Demonstrated, 0 Live LLM Calls)"
+    )
+    set_notes(
+        s1,
+        "Good morning Michael and Marc. Today I am presenting SchemaBridge AI, our Agentic "
+        "Enterprise Integration Accelerator powered by OpenText Aviator ADT. The problem we solve "
+        "is not just mapping fields—it is the time, cost, operational complexity, maintenance burden, "
+        "and risk of integrating enterprise systems and keeping those integrations working as APIs evolve."
     )
 
     # =========================================================================
-    # SLIDE 2: Agenda (Layout: Title | Body)
+    # SLIDE 2: Executive Showcase Summary
     # =========================================================================
     s2 = prs.slides.add_slide(L_TITLE_BODY)
-    set_title(s2, "Agenda")
+    set_title(s2, "1. Executive Showcase Summary: Enterprise Integration Accelerator")
     remove_placeholder(s2, 1)
 
     add_card(
-        s2, 0.67, 1.55, 5.8, 2.45,
-        "1. Vision & Core Architectural Principle",
+        s2, 0.67, 1.42, 5.80, 2.58,
+        "Project / Area & Enterprise Challenge",
         [
-            "Why traditional integrations & live-LLM proxies fail: Weeks of brittle hand-coding vs. slow, costly, and risky live AI calls.",
-            "The SchemaBridge AI breakthrough: Decoupled Two-Phase Architecture — AI advises once at design time; pure Java executes at runtime.",
-            "Zero PII to AI: Customer payloads never leave your network or touch an LLM in production (<5ms latency, 100% deterministic).",
+            "Project / Area: SchemaBridge AI — Agentic Enterprise Integration Accelerator (SE <-> CM3).",
+            "Business Challenge: Integrating enterprise systems (and keeping them working as APIs evolve) drives weeks of custom adapter coding, ongoing framework/library maintenance, brittle debugging, and operational risk.",
+            "Enabling Technology: Uses schema intelligence and a 5-Level Matcher underneath a governed integration lifecycle.",
         ],
-        header_color=OT_NAVY,
+        header_color=OT_RED, title_size=11.6, body_size=9.2,
     )
+
     add_card(
-        s2, 6.85, 1.55, 5.8, 2.45,
-        "2. 5-Level Residual Matching Cascade & Aviator AI",
+        s2, 6.85, 1.42, 5.80, 2.58,
+        "AI-Assisted Approach (OpenText Aviator ADT)",
         [
-            "Deterministic-first field matching: Resolves Exact, Normalised, Synonym, and Historical rules locally at zero token cost.",
-            "Surgical OpenText Aviator ADT invocation: Calls LLM strictly for residual unresolved fields and natural language rule prompts.",
-            "3-Column Interactive Mapping Workspace: Visual side-by-side schema trees, confidence scoring, and one-click human approval.",
+            "Agentic Onboarding (Design Time): Ingests API contracts/Swagger (or sample JSON), runs 4 deterministic matching tiers first, and invokes OpenText Aviator ADT only for semantic/ambiguous integration decisions.",
+            "Shared Deterministic Gateway (Runtime): Publishes versioned integration contracts executed by pure Java in <5 ms (demonstrated) with 0 production LLM calls.",
         ],
-        header_color=OT_BLUE,
+        header_color=OT_NAVY, title_size=11.6, body_size=9.2,
     )
+
     add_card(
-        s2, 0.67, 4.25, 5.8, 2.55,
-        "3. Zero-AI Runtime Engine & Bi-Directional Proxy",
+        s2, 0.67, 4.15, 5.80, 2.68,
+        "Human Guardrails & Governance",
         [
-            "20 Built-In Algebraic Operations: Rename, Date Format, Flatten, Nest, Enum Map, Type Coercion, and Conditional logic in pure Java.",
-            "Automated Bi-Directional Inversion: Forward WRITE rules (System A -> B) automatically synthesize reverse READ rules (System B -> A).",
-            "High-Throughput Jackson AST Engine: Sub-5ms in-memory transformation with full offline resilience even if AI services are unreachable.",
+            "Confidence-Gated Review: High-confidence deterministic matches (>=90%) auto-approve; ambiguous or AI-inferred rules (<90%) require engineer approval before publishing.",
+            "Versioned Contracts & Drift Control: Only APPROVED & PUBLISHED versions serve traffic; updated Swagger specs trigger drift checks on impacted mappings.",
+            "Observable Safe Failure: Unmapped routes and invalid payloads quarantine cleanly (HTTP 422) with correlation IDs.",
         ],
-        header_color=OT_DARK_NAVY,
+        header_color=OT_BLUE, title_size=11.6, body_size=9.2,
     )
+
     add_card(
-        s2, 6.85, 4.25, 5.8, 2.55,
-        "4. Schema Drift Detection, Governance & Patent Claims",
+        s2, 6.85, 4.15, 5.80, 2.68,
+        "Impact, Learning & Short Demo Plan",
         [
-            "Closed-Loop Cryptographic Drift Detection: SHA-256 schema hashing pinpoints broken rules (BROKEN_PATH) before production fails.",
-            "Enterprise Governance: Draft -> Approved -> Published lifecycle gates, immutable versions, and MDC correlation audit trails.",
-            "5 Patent-Pending Innovations: Provisional patent architecture delivering 90%+ faster integration setup and zero runtime AI cost.",
+            "Impact: ~10 min demonstrated SE <-> CM3 onboarding vs. 3–4 weeks estimated traditional build; <5 ms runtime (demonstrated); 0 production LLM calls (no live payload sent to AI).",
+            "Learning: Separating AI-assisted contract design from deterministic Java execution delivers LLM agility without runtime latency, data exposure, or custom adapter sprawl.",
+            "Demo Story: Onboard CM3 as a new integration for SE -> publish governed contract -> run Write & Reverse Read -> quarantine failure -> inspect drift.",
         ],
-        header_color=OT_TEAL,
+        header_color=OT_TEAL, title_size=11.6, body_size=9.2,
+    )
+    set_notes(
+        s2,
+        "This executive summary outlines SchemaBridge AI across problem, approach, guardrails, and "
+        "impact. Traditional enterprise integrations require weeks of custom adapter development and "
+        "ongoing maintenance whenever APIs evolve. SchemaBridge uses OpenText Aviator ADT at design "
+        "time to accelerate onboarding from an estimated three to four weeks down to roughly 10 minutes "
+        "demonstrated, while a shared deterministic Java gateway runs production traffic in under 5 ms."
     )
 
     # =========================================================================
-    # SLIDE 3: Use Cases & Core Problem Solved (Layout: Title | Body)
+    # SLIDE 3: Advantages #1 & #2 — Faster Go-Live & Lower Integration Cost
     # =========================================================================
     s3 = prs.slides.add_slide(L_TITLE_BODY)
-    set_title(s3, "Use Cases & Core Problem Solved")
+    set_title(s3, "2. Faster Time to Go-Live & Lower Cost of Integrating New Systems")
     remove_placeholder(s3, 1)
 
     add_card(
-        s3, 0.67, 1.50, 5.8, 4.45,
-        "Why Traditional Integration & Live-LLM Approaches Fail",
+        s3, 0.67, 1.44, 5.80, 3.05,
+        "Advantage 1: Faster Time to Go-Live (SE ↔ CM3)",
         [
-            "Manual Hand-Coding Bottlenecks: Writing custom adapter code for hundreds of legacy snake_case and modern camelCase fields takes weeks.",
-            "Unacceptable Live LLM Latency (1–5 Seconds): Production API gateways require sub-10ms responses; calling an LLM per payload stalls traffic.",
-            "Hallucinations & Non-Determinism: LLMs randomly drop fields, alter numeric precision, or produce invalid JSON under load.",
-            "Severe Data Privacy & Compliance Risks: Sending live customer PII, health records, or financial payloads to external LLMs violates GDPR & HIPAA.",
-            "Runaway Token Economics & Silent API Breakage: Paying LLM token fees on millions of daily transactions is cost-prohibitive, and schema changes break silently.",
+            "Traditional (Estimated 3–4 Weeks): Analyze source & target APIs, write mapping/transformation code, build bidirectional flows & error handling, test, deploy, and troubleshoot.",
+            "SchemaBridge (~10 Min Demonstrated): Import API contracts -> deterministic discovery -> Aviator ADT resolves semantic ambiguities -> engineer review -> publish contract.",
+            "Enabling Tech: 5-Level Matcher handles deterministic structure first so Aviator focuses only on true semantic gaps.",
         ],
-        header_color=OT_RED,
+        header_color=OT_NAVY, title_size=11.6, body_size=9.2,
     )
+
     add_card(
-        s3, 6.85, 1.50, 5.8, 4.45,
-        "How SchemaBridge AI Solves It",
+        s3, 6.85, 1.44, 5.80, 3.05,
+        "Advantage 2: Lower Cost of Integrating New Systems",
         [
-            "AI Advisory at Design Time Only: OpenText Aviator ADT analyzes schema metadata once to recommend mappings and translate plain-English rules.",
-            "Zero-AI Pure Java Runtime (<5ms): Live payloads execute 100% deterministically in memory via compiled algebraic rules — zero PII ever touches AI.",
-            "5-Level Residual Matching Cascade: Resolves 80%+ of fields deterministically first; sends only leftover unknown fields to Aviator AI.",
-            "Automated Bi-Directional Proxy: Translates both Forward WRITE (Legacy -> Cloud) and Reverse READ (Cloud -> Legacy) with zero legacy code changes.",
-            "Cryptographic Schema Drift Guardrails: SHA-256 fingerprinting detects upstream/downstream API changes and flags affected rules immediately.",
+            "Traditional Adapter Sprawl: Each new system introduces another custom adapter/service to build, test, deploy, monitor, patch, upgrade, and maintain.",
+            "Reusable Integration Platform: New systems onboard primarily through governed, versioned integration contracts on a shared gateway — avoiding a purpose-built service per integration.",
+            "Honest Scope: Major behavioral or protocol changes may still require engineering code.",
         ],
-        header_color=OT_NAVY,
+        header_color=OT_TEAL, title_size=11.6, body_size=9.2,
     )
+
+    # Visual Comparison Diagram at Bottom
     add_banner(
-        s3, 0.67, 6.15, 11.98, 0.65,
-        "Key Outcome: Map complex enterprise schemas in minutes with AI — execute millions of live payloads in <5ms with 0 AI cost and 100% privacy.",
-        bg_color=OT_BLUE,
+        s3, 0.67, 4.65, 5.80, 0.34,
+        "TRADITIONAL: Separate Custom Adapter Lifecycle Per Integration",
+        bg_color=OT_RED, font_size=9.6,
+    )
+    add_pill_box(s3, 0.67, 5.08, 5.80, 0.52, "System A  ->  Custom Adapter #1  ->  System B", "Build · Test · Deploy · Monitor · Patch", fill_color=OT_SOFT_BG, text_color=OT_CHARCOAL, title_size=9.2, sub_size=7.8)
+    add_pill_box(s3, 0.67, 5.66, 5.80, 0.52, "System A  ->  Custom Adapter #2  ->  System C", "Build · Test · Deploy · Monitor · Patch", fill_color=OT_SOFT_BG, text_color=OT_CHARCOAL, title_size=9.2, sub_size=7.8)
+    add_pill_box(s3, 0.67, 6.24, 5.80, 0.52, "System A  ->  Custom Adapter #3  ->  System D", "Build · Test · Deploy · Monitor · Patch", fill_color=OT_SOFT_BG, text_color=OT_CHARCOAL, title_size=9.2, sub_size=7.8)
+
+    add_banner(
+        s3, 6.85, 4.65, 5.80, 0.34,
+        "SCHEMABRIDGE: Shared Gateway + Versioned Integration Contracts",
+        bg_color=OT_DARK_NAVY, font_size=9.6,
+    )
+    add_pill_box(s3, 6.85, 5.08, 1.85, 1.68, "System A\nSystem B\nSystem C\nSystem D", "Disparate APIs", fill_color=OT_NAVY, text_color=OT_WHITE, title_size=9.6, sub_size=8.0)
+    add_pill_box(s3, 8.82, 5.08, 3.83, 1.68, "SchemaBridge Gateway", "Versioned Integration Contracts\nGoverned Transformations\nCentralized Validation & Logs", fill_color=OT_TEAL, text_color=OT_WHITE, title_size=10.4, sub_size=8.6)
+    set_notes(
+        s3,
+        "Here are our first two enterprise advantages. First, faster go-live: in our SE-to-CM3 "
+        "demonstration, onboarding takes roughly 10 minutes demonstrated compared to an estimated "
+        "three to four weeks of traditional custom integration work. Second, lower integration cost: "
+        "instead of building and maintaining a separate custom adapter service for every new system, "
+        "SchemaBridge onboards systems primarily through versioned contracts on a shared gateway."
     )
 
     # =========================================================================
-    # SLIDE 4: Two-Phase Decoupled Architecture & Human Governance
+    # SLIDE 4: Advantages #3 & #5 — Runtime Performance & Privacy-by-Architecture
     # =========================================================================
     s4 = prs.slides.add_slide(L_TITLE_BODY)
-    set_title(s4, "Two-Phase Decoupled Architecture & Governance")
+    set_title(s4, "3. Runtime Performance & Privacy-by-Architecture")
     remove_placeholder(s4, 1)
 
-    # Phase 1 Row
     add_banner(
-        s4, 0.67, 1.45, 11.98, 0.42,
-        "PHASE 1 — DESIGN-TIME AI-ADVISORY DISCOVERY & HUMAN-IN-THE-LOOP APPROVAL (Offline / Zero Live PII)",
-        bg_color=OT_DARK_NAVY, font_size=10.5,
+        s4, 0.67, 1.44, 11.98, 0.42,
+        "CORE PRINCIPLE:  AI designs the integration. Deterministic code runs it.",
+        bg_color=OT_DARK_NAVY, font_size=11.0,
     )
-    phase1_steps = [
-        ("1. Ingest Schemas", "JSON Schema / Sample\nOpenAPI / XML / CSV", OT_NAVY),
-        ("2. Levels 1–4 Match", "Exact, Normalised,\nSynonym & History", OT_NAVY),
-        ("3. Level 5 Aviator AI", "Residual unknown\nfields + NL rules", OT_BLUE),
-        ("4. Confidence Gate", "Scores rules & flags\n<70% for review", OT_BLUE),
-        ("HUMAN GATE", "Review, edit & approve\nin 3-Column UI", OT_GOLD),
-        ("6. Publish Version", "Immutable versioned\ncontract (v1, v2...)", OT_TEAL),
-    ]
-    for i, (t, sub, col) in enumerate(phase1_steps):
-        fg = OT_DARK_NAVY if col == OT_GOLD else OT_WHITE
-        add_pill_box(s4, 0.67 + i * 2.02, 2.00, 1.90, 1.05, t, sub, fill_color=col, text_color=fg)
 
-    # Phase 2 Row
-    add_banner(
-        s4, 0.67, 3.25, 11.98, 0.42,
-        "PHASE 2 — LIVE PRODUCTION ZERO-AI DETERMINISTIC EXECUTION (<5ms In-Memory Java Engine)",
-        bg_color=OT_DARK_NAVY, font_size=10.5,
+    add_card(
+        s4, 0.67, 2.02, 5.80, 3.10,
+        "Advantage 3: Runtime Performance (Design vs. Runtime)",
+        [
+            "Design Time (AI-Assisted): Deterministic matching -> Aviator ADT semantic reasoning -> human approval -> publish contract.",
+            "Runtime (Zero AI): Pure deterministic Java executes every production transformation.",
+            "Demonstrated Result: <5 ms transformation latency and 0 production LLM calls.",
+            "Bidirectional Support: Generates Write and Reverse Read flows from the same governed contract.",
+        ],
+        header_color=OT_NAVY, title_size=11.6, body_size=9.3,
     )
-    phase2_steps = [
-        ("7. System A Payload", "Legacy POS / HR\nsnake_case JSON", OT_NAVY),
-        ("8. Algebraic Engine", "20 pure-Java ops\nin Jackson AST (<5ms)", OT_TEAL),
-        ("9. Schema Validator", "Strict target JSON\nSchema verification", OT_TEAL),
-        ("10. System B Delivery", "Cloud ERP / CRM\ncamelCase ISO JSON", OT_BLUE),
-        ("11. Reverse Flow", "Auto-synthesized\nRead-back inversion", OT_BLUE),
-        ("12. Audit & Drift", "SHA-256 drift check\n& MDC audit trail", OT_NAVY),
-    ]
-    for i, (t, sub, col) in enumerate(phase2_steps):
-        add_pill_box(s4, 0.67 + i * 2.02, 3.80, 1.90, 1.05, t, sub, fill_color=col, text_color=OT_WHITE)
 
-    # Bottom 3 architectural pillar cards
     add_card(
-        s4, 0.67, 5.05, 3.85, 1.85,
-        "100% Data Privacy (Zero PII to AI)",
+        s4, 6.85, 2.02, 5.80, 3.10,
+        "Advantage 5: Data Privacy & Compliance Architecture",
         [
-            "Only structural metadata (field names & types) is evaluated during Phase 1.",
-            "Live customer payloads in Phase 2 never leave your JVM or call external AI APIs.",
+            "Design-Only AI Participation: OpenText Aviator ADT inspects API contracts/schemas at design time, never live production customer traffic.",
+            "Deterministic Payload Execution: Production customer payloads are processed locally by the Java runtime and are not sent to any LLM.",
+            "Privacy-by-Architecture: No live customer payload needs to be exposed to AI during runtime — supporting enterprise privacy and regulatory governance.",
         ],
-        header_color=OT_SLATE, title_size=11.5, body_size=9.5,
+        header_color=OT_TEAL, title_size=11.6, body_size=9.3,
     )
-    add_card(
-        s4, 4.73, 5.05, 3.85, 1.85,
-        "Offline & Outage Resilience",
-        [
-            "If OpenText Aviator ADT or cloud network is unreachable, Levels 1–4 still match deterministically.",
-            "Published runtime transformations execute with zero dependency on AI availability.",
-        ],
-        header_color=OT_SLATE, title_size=11.5, body_size=9.5,
-    )
-    add_card(
-        s4, 8.80, 5.05, 3.85, 1.85,
-        "Strict Lifecycle Enforcement",
-        [
-            "Production execution endpoint (/transform/execute) accepts ONLY published mappings (HTTP 422 guard).",
-            "Any edit to an approved rule automatically resets status to DRAFT and requires re-approval.",
-        ],
-        header_color=OT_SLATE, title_size=11.5, body_size=9.5,
+
+    add_pill_box(s4, 0.67, 5.32, 3.80, 1.38, "<5 ms Transformation", "Demonstrated in local Java gateway\n(No 2–5 s LLM round-trips)", fill_color=OT_BLUE, text_color=OT_WHITE, title_size=11.5, sub_size=8.6)
+    add_pill_box(s4, 4.76, 5.32, 3.80, 1.38, "0 Production LLM Calls", "Zero runtime token cost &\ndeterministic repeatability", fill_color=OT_DARK_NAVY, text_color=OT_WHITE, title_size=11.5, sub_size=8.6)
+    add_pill_box(s4, 8.85, 5.32, 3.80, 1.38, "No Live PII Sent to AI", "Privacy-by-architecture:\ncustomer payloads stay in runtime", fill_color=OT_TEAL, text_color=OT_WHITE, title_size=11.5, sub_size=8.6)
+    set_notes(
+        s4,
+        "Our third and fifth advantages come from strictly separating AI design time from runtime. "
+        "At design time, deterministic matching and Aviator ADT help engineers publish a verified "
+        "contract. At runtime, pure Java runs every transformation in under 5 milliseconds demonstrated "
+        "with zero production LLM calls. That gives us privacy by architecture: no live customer "
+        "payload needs to be exposed to AI during runtime."
     )
 
     # =========================================================================
-    # SLIDE 5: Multi-Format Schema Ingestion & Canonical AST Extraction
+    # SLIDE 5: Advantages #4, #6 & #7 — API Drift, Observability & Less Infra Maintenance
     # =========================================================================
     s5 = prs.slides.add_slide(L_TITLE_BODY)
-    set_title(s5, "Multi-Source Schema Ingestion & Canonical AST Extraction")
+    set_title(s5, "4. API Drift, Observability & Reduced Infrastructure Maintenance")
     remove_placeholder(s5, 1)
 
     add_card(
-        s5, 0.67, 1.50, 2.85, 4.45,
-        "Sample JSON Payloads",
+        s5, 0.67, 1.44, 3.85, 4.55,
+        "Advantage 4: API Drift & Maintenance",
         [
-            "Zero-Spec Onboarding: Paste raw legacy JSON payloads when formal schemas do not exist.",
-            "Automatic Pattern Inference: Detects date formats (dd/MM/yyyy vs ISO-8601), boolean strings ('Yes'/'No'), numbers, and nested objects.",
-            "Flattened Dot-Path Indexing: Indexes deep paths (e.g., contact.email) into canonical SchemaNode trees.",
+            "Traditional: API change -> production breakage or manual analysis -> find mapping code -> edit adapter -> rebuild -> regression test -> redeploy.",
+            "SchemaBridge: Updated Swagger/contract -> detect schema drift -> evaluate impacted mappings -> flag broken/ambiguous paths -> engineer review -> republish version.",
+            "Core Shift: From code maintenance to contract maintenance (major protocol/behavioral changes may still need engineering).",
         ],
-        header_color=OT_NAVY, title_size=12, body_size=10,
+        header_color=OT_NAVY, title_size=11.4, body_size=9.1,
     )
+
     add_card(
-        s5, 3.71, 1.50, 2.85, 4.45,
-        "Formal JSON Schema & OpenAPI",
+        s5, 4.74, 1.44, 3.85, 4.55,
+        "Advantage 6: Observability & Debugging",
         [
-            "Strict Contract Parsing: Ingests Draft-07 / 2020-12 JSON Schemas and OpenAPI / Swagger definitions.",
-            "Constraint Extraction: Preserves required flags, enum allowlists, format patterns, and field descriptions.",
-            "Runtime Validation Gate: Enforces target schema compliance on every transformed payload before delivery.",
+            "Traditional: Inspect scattered logs, transformation code, and multiple services to locate failures.",
+            "SchemaBridge Telemetry: Built-in correlation IDs, transformation logs, schema validation, unmapped-field detection, HTTP 422 quarantine handling, and mapping/version visibility.",
+            "Live Demo Example: Invalid date or unmapped route quarantines before reaching CM3, showing exact failing rule & fix hint.",
         ],
-        header_color=OT_BLUE, title_size=12, body_size=10,
+        header_color=OT_BLUE, title_size=11.4, body_size=9.1,
     )
+
     add_card(
-        s5, 6.75, 1.50, 2.85, 4.45,
-        "API Registry & Connectors",
+        s5, 8.81, 1.44, 3.84, 4.55,
+        "Advantage 7: Less Tech & Infra Maintenance",
         [
-            "Live System Registration: Register System A and System B endpoints in the built-in API Registry.",
-            "Bi-Directional Proxy Routing: Exposes /api/demo/write and /api/demo/read proxy pipelines between registered apps.",
-            "Multi-Project Isolation: Manage independent integration pipelines (e.g., SEtoCM3, HR-to-AD, POS-to-ERP).",
+            "Traditional Burden: Each custom integration service adds frameworks, libraries, dependency upgrades, CVE remediation, pipelines, infrastructure, monitoring, and ops ownership.",
+            "Centralized Gateway: Consolidates integration execution into one reusable deterministic gateway with versioned contracts.",
+            "Realistic Value: Reduces the number of purpose-built integration components and their ongoing maintenance burden.",
         ],
-        header_color=OT_DARK_NAVY, title_size=12, body_size=10,
+        header_color=OT_TEAL, title_size=11.4, body_size=9.1,
     )
-    add_card(
-        s5, 9.80, 1.50, 2.85, 4.45,
-        "SHA-256 Schema Fingerprinting",
-        [
-            "Cryptographic Baseline: Computes a deterministic SHA-256 hash over normalized schema structure on import.",
-            "Version History Tracking: Stores every schema revision per project (Source & Target) in PostgreSQL / H2.",
-            "Instant Drift Comparison: Powers structural tree diffing whenever upstream or downstream contracts evolve.",
-        ],
-        header_color=OT_TEAL, title_size=12, body_size=10,
-    )
+
     add_banner(
-        s5, 0.67, 6.15, 11.98, 0.65,
-        "Design Principle: Normalize any legacy payload or modern API contract into a unified SchemaNode AST with cryptographic version control.",
-        bg_color=OT_DARK_NAVY,
+        s5, 0.67, 6.14, 11.98, 0.64,
+        "Operational Shift:  From code maintenance & scattered debugging  ->  to governed contract evolution & observable integration flows.",
+        bg_color=OT_DARK_NAVY, font_size=10.3,
+    )
+    set_notes(
+        s5,
+        "Keeping integrations running over time is where most teams bleed effort. When an API "
+        "evolves, SchemaBridge detects contract drift, identifies impacted mappings, and lets an "
+        "engineer review and republish a new contract version—moving from code maintenance to "
+        "contract maintenance. During operations, correlation IDs, unmapped-field alerts, and HTTP 422 "
+        "quarantine logs replace multi-service debugging, while a shared gateway reduces adapter sprawl."
     )
 
     # =========================================================================
-    # SLIDE 6: The 5-Level Residual Matching Cascade
+    # SLIDE 6: Executive Comparison — Why SchemaBridge?
     # =========================================================================
     s6 = prs.slides.add_slide(L_TITLE_BODY)
-    set_title(s6, "5-Level Residual Matching Cascade (Patent-Pending)")
+    set_title(s6, "5. Why SchemaBridge?")
     remove_placeholder(s6, 1)
 
-    tiers = [
-        (
-            "LEVEL 1: Exact Name Match (Confidence: 100% — Deterministic · 0 Token Cost)",
-            "Matches identical source and target field paths (e.g., id -> id, customerId -> customerId) and automatically infers required type coercions.",
-            OT_NAVY,
-        ),
-        (
-            "LEVEL 2: Normalised Structural Match (Confidence: 95% — Deterministic · 0 Token Cost)",
-            "Strips technical prefixes/suffixes (tbl_, _id, _num) and normalizes snake_case, camelCase, and PascalCase (e.g., total_amount -> totalAmount, project_id -> projectId).",
-            OT_BLUE,
-        ),
-        (
-            "LEVEL 3: Domain Synonym Dictionary Match (Confidence: 93% — Deterministic · 0 Token Cost)",
-            "Consults a persisted, configurable enterprise synonym repository (e.g., name -> userName, dob -> dateOfBirth, active -> accountEnabled, cust_id -> customerId).",
-            OT_DARK_NAVY,
-        ),
-        (
-            "LEVEL 4: Historical Approved Rule Reuse (Confidence: 90% — Deterministic · 0 Token Cost)",
-            "Queries previously approved and published MappingRule records across the domain to reuse proven operations and format parameters automatically.",
-            OT_TEAL,
-        ),
-        (
-            "LEVEL 5: OpenText Aviator ADT Semantic AI (Invoked ONLY for Residual Unmapped Fields)",
-            "Sends only the leftover unresolved source/target nodes to Aviator ADT with strict JSON Schema output constraints and prompt-injection sandboxing (e.g., contact.email -> emailAddress).",
-            OT_AMBER,
-        ),
-    ]
-    for idx, (heading, desc, col) in enumerate(tiers):
-        y = 1.48 + idx * 1.06
-        add_card(
-            s6, 0.67, y, 11.98, 0.96,
-            heading,
-            [desc],
-            header_color=col, title_size=11.5, body_size=10,
-        )
+    add_comparison_table(s6, 0.67, 1.45, 11.98, 5.28)
+    set_notes(
+        s6,
+        "This comparison summarizes why SchemaBridge is an enterprise integration accelerator rather "
+        "than another mapping utility. Across all seven dimensions—time to go-live, new integration "
+        "cost, runtime performance, API evolution, data privacy, debugging, and infrastructure "
+        "maintenance—SchemaBridge replaces bespoke adapter lifecycles with governed, versioned "
+        "integration contracts on a deterministic Java gateway."
+    )
 
     # =========================================================================
-    # SLIDE 7: Interactive 3-Column Mapping Workspace & Aviator NL Assistant (Screenshot 1)
+    # SLIDE 7: Demo Story (SE <-> CM3) & Executive Takeaway
     # =========================================================================
     s7 = prs.slides.add_slide(L_TITLE_BODY)
-    set_title(s7, "Interactive 3-Column Mapping Workspace & Aviator AI")
+    set_title(s7, "6. Live Demo Story (SE ↔ CM3) & Executive Takeaway")
     remove_placeholder(s7, 1)
 
-    add_card(
-        s7, 0.67, 1.50, 4.95, 5.30,
-        "Visual Mapping & Natural Language AI",
-        [
-            "3-Column Mapping Studio: Displays Source Fields (left), Active Mapping Rules with confidence & match badges (center), and Target Fields with format constraints (right).",
-            "Natural Language Rule Assistant: Type plain English (e.g., 'Set accountEnabled to true when active is Yes' or 'Combine firstName and lastName into displayName') and click 'Convert with Aviator AI'.",
-            "Transparent Provenance Badges: Every rule displays its exact confidence score (e.g., 95% HIGH) and origin tier (NORMALISED, SYNONYM, HISTORICAL, AI_SEMANTIC).",
-            "Granular Human-in-the-Loop Controls: Filter by 'Review Required', edit rule operations/parameters inline, reject bad suggestions, or click 'Approve All' & 'Publish v4'.",
-            "Live Aviator Telemetry Pill: Header continuously monitors OpenText Aviator AI connectivity and response latency (e.g., Connected · 241ms).",
-        ],
-        header_color=OT_NAVY, title_size=12, body_size=9.8,
-    )
-
-    if SCREENSHOT_MAPPING.is_file():
-        frame = s7.shapes.add_shape(
-            MSO_SHAPE.ROUNDED_RECTANGLE,
-            Inches(5.80),
-            Inches(1.50),
-            Inches(6.85),
-            Inches(3.60),
-        )
-        frame.adjustments[0] = 0.02
-        frame.fill.solid()
-        frame.fill.fore_color.rgb = OT_WHITE
-        frame.line.color.rgb = OT_BLUE
-        frame.line.width = Pt(1.5)
-
-        s7.shapes.add_picture(
-            str(SCREENSHOT_MAPPING),
-            Inches(5.88),
-            Inches(1.58),
-            width=Inches(6.69),
-        )
-
-    add_card(
-        s7, 5.80, 5.25, 6.85, 1.55,
-        "Live SchemaBridge AI UI — 3-Column Mapping Workspace (Version v4)",
-        [
-            "Active Rules Shown: total_amount -> totalAmount (95% HIGH · NORMALISED) and name -> userName (93% HIGH · SYNONYM).",
-            "Lifecycle Governance: Clone immutable versions, generate 5-level suggestions on demand, and publish verified rules to production.",
-        ],
-        header_color=OT_BLUE, title_size=11.5, body_size=9.5,
-    )
-
-    # =========================================================================
-    # SLIDE 8: Multi-Project Integration Hub & API Registry (Screenshot 2)
-    # =========================================================================
-    s8 = prs.slides.add_slide(L_TITLE_BODY)
-    set_title(s8, "Multi-Project Integration Hub & End-to-End Studio")
-    remove_placeholder(s8, 1)
-
-    add_card(
-        s8, 0.67, 1.50, 4.95, 5.30,
-        "3-URL Gateway Hub & 6-Case Live Telemetry",
-        [
-            "Explicit 3-URL Architecture: Connects (1) Source System A URL -> (2) SchemaBridge Gateway Proxy URL (/api/gateway/{id}/...) -> (3) Target System B URL.",
-            "2 Complete Pre-Seeded Projects: Includes SEtoCM3 (Subscription Engine <-> Cloud Metering CM3) and LegacyPOS-to-CloudERP out of the box.",
-            "6 Live Enterprise Cases: Simulate Happy WRITE (201), Reverse READ (200), Unmapped Fields Warning, Missing Mapping Quarantine (422), Transform Error (400), and Schema Validation Error (422).",
-            "Missing Mapping & Unmapped Policies: Configurable DROP_WITH_WARNING, PASS_THROUGH, or STRICT_REJECT_422 quarantine with payload capture.",
-            "Full Error & Trace Inspector: Logs every correlationId, failing rule diagnostic, unmapped field list, and actionable resolution hint.",
-        ],
-        header_color=OT_DARK_NAVY, title_size=12, body_size=9.6,
-    )
-
-    if SCREENSHOT_APPS.is_file():
-        frame2 = s8.shapes.add_shape(
-            MSO_SHAPE.ROUNDED_RECTANGLE,
-            Inches(5.80),
-            Inches(1.50),
-            Inches(6.85),
-            Inches(3.60),
-        )
-        frame2.adjustments[0] = 0.02
-        frame2.fill.solid()
-        frame2.fill.fore_color.rgb = OT_WHITE
-        frame2.line.color.rgb = OT_BLUE
-        frame2.line.width = Pt(1.5)
-
-        s8.shapes.add_picture(
-            str(SCREENSHOT_APPS),
-            Inches(5.88),
-            Inches(1.58),
-            width=Inches(6.69),
-        )
-
-    add_card(
-        s8, 5.80, 5.25, 6.85, 1.55,
-        "Live SchemaBridge AI UI — Integration Projects & Apps Dashboard",
-        [
-            "Project Card (SEtoCM3): Tracks 4 mapping versions with one-click workspace launch and lifecycle status badges.",
-            "Angular 21 Standalone UI: Modern dark-mode glassmorphic interface with real-time Aviator AI health telemetry.",
-        ],
-        header_color=OT_TEAL, title_size=11.5, body_size=9.5,
-    )
-
-    # =========================================================================
-    # SLIDE 9: Section Divider (Layout: Divider 2)
-    # =========================================================================
-    s9 = prs.slides.add_slide(L_DIVIDER)
-    s9.placeholders[0].text = "Zero-AI Runtime, Bi-Directional Proxy & Governance"
-    s9.placeholders[1].text = "Sub-5ms deterministic execution, 20 algebraic operations, schema drift detection, and patent claims"
-
-    # =========================================================================
-    # SLIDE 10: Pure-Java Deterministic Runtime & 20 Algebraic Operations
-    # =========================================================================
-    s10 = prs.slides.add_slide(L_TITLE_BODY)
-    set_title(s10, "Zero-AI Deterministic Runtime & 20 Algebraic Operations")
-    remove_placeholder(s10, 1)
-
-    add_card(
-        s10, 0.67, 1.50, 5.80, 2.50,
-        "In-Memory Jackson AST Transformation Engine (<5ms)",
-        [
-            "100% Deterministic Execution: Compiles approved MappingRules into pure Java AST operations — zero LLM calls, zero hallucinations, and zero token cost.",
-            "Strict Target JSON Schema Validation: Validates every transformed output payload against the target system's contract before forwarding.",
-            "Draft Preview vs. Production Gate: Test draft mappings safely in Transformation Lab (/preview), while production (/execute) enforces published-only versions.",
-        ],
-        header_color=OT_NAVY, title_size=12, body_size=9.8,
-    )
-    add_card(
-        s10, 6.85, 1.50, 5.80, 2.50,
-        "Automated Bi-Directional Schema Inversion (WRITE & READ)",
-        [
-            "Single-Definition Dual Direction: Define forward WRITE rules (System A -> System B) once; SchemaBridge automatically synthesizes the reverse READ rules.",
-            "Symmetric Structural Reversal: Automatically inverts FLATTEN <-> NEST, DATE_FORMAT patterns, BOOLEAN <-> STRING, and ENUM_MAP dictionaries.",
-            "Zero Legacy Refactoring: Legacy System A both writes to and reads from modern Cloud System B in its native legacy format.",
-        ],
-        header_color=OT_BLUE, title_size=12, body_size=9.8,
-    )
-
     add_banner(
-        s10, 0.67, 4.18, 11.98, 0.40,
-        "20 SUPPORTED DETERMINISTIC TRANSFORMATION OPERATIONS (EXECUTED IN PURE JAVA AT <5ms LATENCY)",
-        bg_color=OT_DARK_NAVY, font_size=10.5,
+        s7, 0.67, 1.40, 11.98, 0.44,
+        "Demo Story: \"CM3 is a new platform SE needs to integrate with. Let's take it from two API contracts to a governed, running integration.\"",
+        bg_color=OT_DARK_NAVY, font_size=9.8,
     )
-    op_cards = [
-        (
-            "Structural & Path Ops",
-            [
-                "RENAME: Direct key translation.",
-                "FLATTEN: Collapse nested paths (contact.email -> emailAddress).",
-                "NEST: Construct deep object hierarchies.",
-                "ARRAY_MAP / COPY / REMOVE: Collection & field routing.",
-            ],
-            OT_NAVY,
-        ),
-        (
-            "Type & Date Coercion",
-            [
-                "DATE_FORMAT: e.g., dd/MM/yyyy <-> yyyy-MM-dd.",
-                "STRING_TO_BOOLEAN & BOOLEAN_TO_STRING ('Yes' <-> true).",
-                "STRING_TO_NUMBER & NUMBER_TO_STRING (1001 <-> '1001').",
-            ],
-            OT_BLUE,
-        ),
-        (
-            "Business Logic & Enums",
-            [
-                "ENUM_MAP: Translate codes ('GOLD_TIER' <-> 'GLD').",
-                "CONDITIONAL: Rule-based branching expressions.",
-                "DEFAULT_VALUE: Fallback when source is null/missing.",
-                "CONSTANT_VALUE: Inject static target attributes.",
-            ],
-            OT_TEAL,
-        ),
-        (
-            "String Manipulation",
-            [
-                "CONCAT: Merge multiple fields (firstName + lastName).",
-                "SPLIT: Tokenize composite strings into fields.",
-                "TRIM / UPPERCASE / LOWERCASE: Canonical text normalization.",
-            ],
-            OT_SLATE,
-        ),
+
+    demo_steps = [
+        ("1. Two Systems", "SE & CM3 start\nindependent", OT_NAVY),
+        ("2. Import Specs", "Load SE & CM3\nSwagger contracts", OT_NAVY),
+        ("3. Discovery", "Run deterministic\nL1–L4 matching", OT_BLUE),
+        ("4. Aviator AI", "Resolve semantic\nambiguity (L5)", OT_BLUE),
+        ("5. Contract", "Inspect generated\nintegration rules", OT_BLUE),
+        ("6. Approve", "Check confidence\n& human sign-off", OT_GOLD),
+        ("7. Publish", "Lock versioned\ncontract", OT_GOLD),
+        ("8. SE Request", "Send real SE\npayload to GW", OT_TEAL),
+        ("9. CM3 (<5ms)", "Verify CM3 output\n& <5 ms latency", OT_TEAL),
+        ("10. Reverse Read", "Execute CM3 -> SE\nread response", OT_TEAL),
+        ("11. Quarantine", "Block invalid/unmapped\n(HTTP 422)", OT_RED),
+        ("12. API Drift", "Update Swagger &\ndetect impacted rule", OT_DARK_NAVY),
     ]
-    for i, (o_title, o_bullets, o_col) in enumerate(op_cards):
-        add_card(
-            s10, 0.67 + i * 3.04, 4.72, 2.86, 2.18,
-            o_title, o_bullets, header_color=o_col, title_size=11, body_size=9.2,
-        )
-
-    # =========================================================================
-    # SLIDE 11: Live Bi-Directional Demo Scenario: System A <-> System B
-    # =========================================================================
-    s11 = prs.slides.add_slide(L_TITLE_BODY)
-    set_title(s11, "Live Bi-Directional Walkthrough: Legacy POS <-> Cloud ERP")
-    remove_placeholder(s11, 1)
-
-    add_card(
-        s11, 0.67, 1.50, 3.85, 4.45,
-        "System A: Legacy Core POS Payload",
-        [
-            "order_num: 'ORD-2026-991' (snake_case string)",
-            "cust_id: 'CUST-4081' (abbreviated legacy key)",
-            "name: 'Dr. Sarah Connor' (flat customer name)",
-            "dob: '15/08/1988' (slash date dd/MM/yyyy)",
-            "active: 'Yes' (string boolean flag)",
-            "tier: 'GOLD_TIER' (verbose legacy enum)",
-            "contact.email: 'sarah.c@cyberdyne.org' (nested object)",
-            "total_amount: 499.99 (snake_case decimal)",
-        ],
-        header_color=OT_SLATE, title_size=11.5, body_size=9.8,
-    )
-    add_card(
-        s11, 4.73, 1.50, 3.85, 4.45,
-        "SchemaBridge Rules (<3ms Pure Java)",
-        [
-            "order_num -> orderId: RENAME (92% · NORMALISED)",
-            "cust_id -> customerId: RENAME (93% · SYNONYM)",
-            "name -> userName: RENAME (93% · SYNONYM)",
-            "dob -> dateOfBirth: DATE_FORMAT dd/MM/yyyy -> yyyy-MM-dd (95% · SYNONYM)",
-            "active -> accountEnabled: STRING_TO_BOOLEAN (93% · SYNONYM)",
-            "tier -> membershipLevel: ENUM_MAP GOLD_TIER -> GLD (90% · AI_SEMANTIC)",
-            "contact.email -> emailAddress: FLATTEN (95% · AI_SEMANTIC)",
-            "total_amount -> totalAmount: RENAME (95% · NORMALISED)",
-        ],
-        header_color=OT_NAVY, title_size=11.5, body_size=9.5,
-    )
-    add_card(
-        s11, 8.80, 1.50, 3.85, 4.45,
-        "System B: Cloud ERP Validated Output",
-        [
-            "orderId: 'ORD-2026-991' (camelCase contract)",
-            "customerId: 'CUST-4081' (canonical ID)",
-            "userName: 'Dr. Sarah Connor' (mapped synonym)",
-            "dateOfBirth: '1988-08-15' (ISO-8601 date verified)",
-            "accountEnabled: true (native JSON boolean)",
-            "membershipLevel: 'GLD' (3-letter ERP enum code)",
-            "emailAddress: 'sarah.c@cyberdyne.org' (flattened root field)",
-            "totalAmount: 499.99 (JSON Schema VALIDATED)",
-        ],
-        header_color=OT_TEAL, title_size=11.5, body_size=9.8,
-    )
-    add_banner(
-        s11, 0.67, 6.15, 11.98, 0.65,
-        "Reverse READ Flow: When System A queries System B, SchemaBridge inverts all 8 rules in <3ms (re-nesting contact.email & restoring '15/08/1988').",
-        bg_color=OT_BLUE,
-    )
-
-    # =========================================================================
-    # SLIDE 12: Schema Drift Detection, Versioning & Security Guardrails
-    # =========================================================================
-    s12 = prs.slides.add_slide(L_TITLE_BODY)
-    set_title(s12, "Schema Drift Detection, Versioning & Security Guardrails")
-    remove_placeholder(s12, 1)
-
-    add_card(
-        s12, 0.67, 1.50, 3.85, 2.55,
-        "Closed-Loop Schema Drift Detection",
-        [
-            "SHA-256 Structural Diffing: Detects ADDED, REMOVED, and TYPE_CHANGED fields across schema versions (/schemas/diff).",
-            "Automatic Rule Impact Mapping: Cross-references schema diffs against active MappingRules and flags broken paths (BROKEN_PATH).",
-            "Proactive Alerting: Catches breaking upstream/downstream API changes before bad data reaches production.",
-        ],
-        header_color=OT_NAVY, title_size=12, body_size=9.8,
-    )
-    add_card(
-        s12, 4.73, 1.50, 3.85, 2.55,
-        "Immutable Versioning & Approval Gates",
-        [
-            "Strict State Machine: Mappings progress through DRAFT -> SUGGESTED -> APPROVED -> PUBLISHED.",
-            "Tamper-Proof Revisions: Modifying any rule on an approved mapping clears approval metadata and reverts to DRAFT.",
-            "Read-Only Published Contracts: Published versions (v1..vN) are immutable; engineers clone a version to evolve rules safely.",
-        ],
-        header_color=OT_BLUE, title_size=12, body_size=9.8,
-    )
-    add_card(
-        s12, 8.80, 1.50, 3.85, 2.55,
-        "Enterprise Audit Trail & Observability",
-        [
-            "Full Lifecycle Auditing: Records every project creation, schema import, AI generation, rule edit, approval, and publication.",
-            "MDC Correlation Logging: Structured JSON logs stamp every request with severity, serviceCode, and request.uuid.",
-            "Execution Metrics: Tracks exact transformation duration (ms) and validation pass/fail rates per version.",
-        ],
-        header_color=OT_TEAL, title_size=12, body_size=9.8,
-    )
-
-    add_card(
-        s12, 0.67, 4.25, 11.98, 2.60,
-        "Defense-in-Depth Security & AI Prompt Safety Architecture",
-        [
-            "Zero Production Data Exposure: Customer payloads are processed strictly inside the local Spring Boot JVM; external AI never sees live transaction data.",
-            "Prompt Injection Sandboxing: Aviator ADT system prompts treat all schema field names, descriptions, and sample values as untrusted data and enforce strict JSON Schema responses.",
-            "Externalized Credential Hygiene: Google Vertex AI / Aviator credentials are injected via environment variables (credentials/credentials.json excluded from Git and logs).",
-        ],
-        header_color=OT_DARK_NAVY, title_size=12, body_size=10,
-    )
-
-    # =========================================================================
-    # SLIDE 13: Patent-Pending Innovations (5 Core Claims)
-    # =========================================================================
-    s13 = prs.slides.add_slide(L_TITLE_BODY)
-    set_title(s13, "Patent Disclosure: 5 Core Architectural Claims")
-    remove_placeholder(s13, 1)
-
-    claims = [
-        (
-            "CLAIM 1: 5-Tier Residual Matching Cascade",
-            "Cascades field resolution through Exact, Normalised, Domain Synonym, and Historical rules at zero token cost — delegating ONLY residual unmapped fields to an LLM under strict schema constraints.",
-            OT_NAVY,
-        ),
-        (
-            "CLAIM 2: Decoupled AI-Advisory Synthesis with Zero-AI Runtime",
-            "Isolates generative AI strictly to offline design-time rule discovery while executing 100% of live production transactions in a <5ms deterministic in-memory engine with zero PII exposure.",
-            OT_BLUE,
-        ),
-        (
-            "CLAIM 3: Closed-Loop Cryptographic Schema Drift & Impact Mapping",
-            "Fingerprints schemas via SHA-256, computes structural tree diffs (added/removed/type-changed nodes), and automatically traces breaking changes to affected transformation rules (BROKEN_PATH).",
-            OT_DARK_NAVY,
-        ),
-        (
-            "CLAIM 4: Confidence-Gated Human-in-the-Loop Safeguard",
-            "Computes multi-tier confidence scores for every rule, quarantining low-confidence or AI-inferred mappings into a mandatory review gate and blocking unapproved/unpublished rules from production.",
-            OT_TEAL,
-        ),
-        (
-            "CLAIM 5: Automated Bi-Directional Schema Inversion",
-            "Automatically synthesizes reverse READ transformation rules (including NEST <-> FLATTEN and format reversal) from approved forward WRITE rules without writing integration logic twice.",
-            OT_AMBER,
-        ),
-    ]
-    for idx, (c_title, c_desc, c_col) in enumerate(claims):
-        y = 1.48 + idx * 1.06
-        add_card(
-            s13, 0.67, y, 11.98, 0.96,
-            c_title,
-            [c_desc],
-            header_color=c_col, title_size=11.5, body_size=10,
-        )
-
-    # =========================================================================
-    # SLIDE 14: Business & Engineering Value Canvas (Matching Slide 13 of Template)
-    # =========================================================================
-    s14 = prs.slides.add_slide(L_TITLE_BODY)
-    set_title(s14, "Business & Engineering Value Canvas")
-    remove_placeholder(s14, 1)
-
-    meta_items = [
-        ("Designed for:", "Enterprise Integration & Platform Teams"),
-        ("Inventor / Built by:", "Baljinder Singh"),
-        ("AI Engine:", "OpenText Aviator ADT"),
-        ("Runtime:", "Java 21 · Spring Boot 3 (<5ms)"),
-    ]
-    for i, (k, v) in enumerate(meta_items):
+    for i, (t, sub, col) in enumerate(demo_steps):
+        row = i // 6
+        col_i = i % 6
+        fg = OT_DARK_NAVY if col == OT_GOLD else OT_WHITE
         add_pill_box(
-            s14, 0.67 + i * 3.04, 1.32, 2.86, 0.48,
-            f"{k} {v}", "", fill_color=OT_LIGHT_GRAY, text_color=OT_DARK_NAVY, title_size=9.5,
-        )
-
-    canvas_cols = [
-        (
-            "1. Key Partners & Inputs",
-            [
-                "OpenText Aviator ADT: Enterprise LLM orchestration & NL rule parsing.",
-                "Source Systems (System A): Legacy POS, HR, Billing, On-Premise DBs.",
-                "Target Systems (System B): Cloud ERP, Salesforce, ServiceNow, Directory APIs.",
-            ],
-            OT_NAVY,
-        ),
-        (
-            "2. Key Activities",
-            [
-                "Schema Ingestion: Parse JSON Schemas, OpenAPI specs & sample payloads.",
-                "5-Level Matching: Auto-map fields across deterministic + AI tiers.",
-                "Deterministic Execution: Run bi-directional transformations in <5ms.",
-            ],
-            OT_BLUE,
-        ),
-        (
-            "3. Value Propositions",
-            [
-                "90%+ Faster Onboarding: Map enterprise schemas in minutes, not weeks.",
-                "100% Data Privacy: Zero live customer PII ever sent to an LLM.",
-                "Ultra-Fast & Predictable: <5ms pure-Java execution with 0 hallucinations.",
-            ],
-            OT_DARK_NAVY,
-        ),
-        (
-            "4. User Workflows",
-            [
-                "3-Column Visual Studio: Inspect, edit, and approve field mappings.",
-                "NL Rule Assistant: Describe complex transformations in plain English.",
-                "Transformation Lab: Live preview & JSON Schema validation before publish.",
-            ],
-            OT_BLUE,
-        ),
-        (
-            "5. Target Teams",
-            [
-                "Enterprise Integration Architects: Bridging legacy & cloud SaaS ecosystems.",
-                "Platform & API Engineering: Building B2B customer onboarding connectors.",
-                "Regulated Industries: Healthcare (HIPAA), Finance (PCI), EU (GDPR).",
-            ],
-            OT_NAVY,
-        ),
-    ]
-    for i, (c_title, c_bullets, c_col) in enumerate(canvas_cols):
-        add_card(
-            s14, 0.67 + i * 2.43, 1.92, 2.31, 3.35,
-            c_title, c_bullets, header_color=c_col, title_size=10.5, body_size=8.8,
+            s7,
+            0.67 + col_i * 2.01,
+            1.96 + row * 0.94,
+            1.90,
+            0.84,
+            t,
+            sub,
+            fill_color=col,
+            text_color=fg,
+            title_size=9.0,
+            sub_size=7.7,
         )
 
     add_card(
-        s14, 0.67, 5.40, 5.85, 1.55,
-        "6. Token & Cost Efficiency Structure",
+        s7, 0.67, 3.96, 11.98, 1.24,
+        "Integration Lifecycle Shift",
         [
-            "Zero Runtime Token Cost: Millions of daily production API calls run on local CPU in pure Java at $0 LLM cost.",
-            "80%+ Design-Time Token Savings: Levels 1–4 resolve exact, normalized, synonym, and historical fields before calling Aviator AI.",
+            "Core Shift: SchemaBridge changes enterprise integration from a custom coding project into a governed onboarding and lifecycle-management workflow.",
+            "Observable Safety: Live Gateway telemetry (correlation IDs, applied rules, unmapped fields, HTTP 422 quarantine) validates every call before System B is touched.",
         ],
-        header_color=OT_SLATE, title_size=11, body_size=9.2,
-    )
-    add_card(
-        s14, 6.80, 5.40, 5.85, 1.55,
-        "7. Measurable Engineering ROI & Reliability Impact",
-        [
-            "Eliminates Silent Production Outages: SHA-256 schema drift detection and strict target JSON Schema validation catch breaking changes immediately.",
-            "Halves Integration Maintenance: Automated bi-directional inversion maintains both WRITE and READ pipelines from a single rule set.",
-        ],
-        header_color=OT_TEAL, title_size=11, body_size=9.2,
+        header_color=OT_NAVY, title_size=11.2, body_size=9.3,
     )
 
-    # =========================================================================
-    # SLIDE 15: Technology Stack, Deployment & Future Roadmap
-    # =========================================================================
-    s15 = prs.slides.add_slide(L_TITLE_BODY)
-    set_title(s15, "Technology Stack, Deployment & Roadmap")
-    remove_placeholder(s15, 1)
-
-    roadmap_cols = [
-        (
-            "Enterprise Tech Stack",
-            [
-                "Backend: Java 21 LTS, Spring Boot 3.3.4, Spring Data JPA, Jackson AST, JSON Schema Validator, OpenAPI 2.6.",
-                "Frontend: Angular 21 Standalone, Modern Dark Glassmorphism UI.",
-                "AI Engine: OpenText Aviator ADT (Google GenAI / Vertex AI).",
-                "Database & Infra: PostgreSQL / H2 zero-config dev, Redis, Docker Compose, Playwright E2E.",
-            ],
-            OT_NAVY,
-        ),
-        (
-            "Q1–Q2: Core Platform (Completed)",
-            [
-                "5-Level Residual Matching Cascade & 20 deterministic Java operations.",
-                "OpenText Aviator ADT integration for semantic matching & NL rules.",
-                "3-Column Mapping Workspace, Transformation Lab & Bi-Directional Proxy.",
-                "Lifecycle hardening, SHA-256 drift detection, Audit Trail & Patent Disclosure.",
-            ],
-            OT_TEAL,
-        ),
-        (
-            "Q3: Event Streaming & Security",
-            [
-                "Kafka & RabbitMQ Connectors: High-throughput asynchronous event stream translation between topics.",
-                "Enterprise RBAC & SSO: OAuth2 / OIDC project-level authorization and multi-tenant isolation.",
-                "Optimistic Concurrency & Immutable Artifacts: Signed, exportable mapping bundles for air-gapped prod.",
-            ],
-            OT_BLUE,
-        ),
-        (
-            "Q4: Multi-Protocol & Auto-Migration",
-            [
-                "GraphQL, SOAP/XML & Avro/Protobuf: Native multi-protocol ingestion and cross-protocol translation.",
-                "AI Drift Auto-Patching: Aviator AI automatically proposes draft rule migrations when SHA-256 drift is detected.",
-                "Live Traffic Shadow Testing: Replay production traffic against draft vNext mappings to verify 100% compatibility.",
-            ],
-            OT_DARK_NAVY,
-        ),
-    ]
-    for i, (rq_title, rq_bullets, rq_col) in enumerate(roadmap_cols):
-        add_card(
-            s15, 0.67 + i * 3.04, 1.55, 2.86, 5.20,
-            rq_title, rq_bullets, header_color=rq_col, title_size=11, body_size=9.4,
-        )
+    add_banner(
+        s7, 0.67, 5.34, 11.98, 1.44,
+        "Executive Takeaway:\n"
+        "Faster go-live. Lower integration cost. High-performance runtime. Easier API evolution.\n"
+        "No production data sent to AI. Better operational visibility. Less custom integration infrastructure to maintain.",
+        bg_color=OT_TEAL, font_size=11.0,
+    )
+    set_notes(
+        s7,
+        "Our live demo tells a clear story: CM3 is a new platform SE needs to integrate with. "
+        "In 12 quick steps, we go from two independent Swagger contracts to deterministic discovery, "
+        "Aviator AI semantic resolution, human approval and publishing, live Write and Reverse Read "
+        "execution in under 5 ms, HTTP 422 quarantine handling, and API drift detection. "
+        "SchemaBridge turns enterprise integration from a custom coding project into a governed "
+        "onboarding and lifecycle-management workflow."
+    )
 
     # =========================================================================
-    # SLIDE 16: Back Cover (Layout: Back cover)
+    # SLIDE 8: OpenText Back Cover (Closing Slide)
     # =========================================================================
     prs.slides.add_slide(L_BACK)
+
+    # =========================================================================
+    # BACKUP SLIDES (After Closing Slide): Technical Deep-Dives + Screenshots
+    # =========================================================================
+    b1 = prs.slides.add_slide(L_TITLE_BODY)
+    set_title(b1, "Backup: Enabling Tech — 5-Level Matching Funnel & Workspace")
+    remove_placeholder(b1, 1)
+    add_card(
+        b1, 0.67, 1.48, 5.25, 5.32,
+        "5-Level Residual Matching Cascade",
+        [
+            "L1 — Exact Match (Deterministic, Free): Identical names & type coercion.",
+            "L2 — Normalization (Deterministic, Free): snake_case <-> camelCase, dates, booleans.",
+            "L3 — Business Synonyms (Deterministic, Free): acct_num -> tenantAccountId, dob -> dateOfBirth.",
+            "L4 — Approved Memory (Deterministic, Free): Reuses prior approved mappings.",
+            "L5 — OpenText Aviator ADT (AI-Assisted): Resolves complex/nested semantic gaps & plain-English rules.",
+        ],
+        header_color=OT_NAVY, title_size=11.6, body_size=9.2,
+    )
+    add_framed_screenshot(b1, IMG_MAPPING_WORKSPACE, 6.10, 1.48, 6.55, 3.55, border_color=OT_BLUE)
+    add_card(
+        b1, 6.10, 5.18, 6.55, 1.62,
+        "Confidence-Gated Review & 1-Click Reverse Read",
+        [
+            "Rules <90% confidence pause in the review queue for engineer approval before publishing.",
+            "1-click inversion generates Reverse Read contracts from Forward Write contracts.",
+        ],
+        header_color=OT_BLUE, title_size=11.4, body_size=9.2,
+    )
+
+    b2 = prs.slides.add_slide(L_TITLE_BODY)
+    set_title(b2, "Backup: Live 3-URL Gateway Simulator (All 6 Enterprise Cases)")
+    remove_placeholder(b2, 1)
+    add_card(
+        b2, 0.67, 1.48, 5.25, 5.32,
+        "All 6 Live Gateway Cases (SE ↔ CM3)",
+        [
+            "Case 1 — Normal Write: SE payload -> CM3 schema (HTTP 201, <5 ms demonstrated).",
+            "Case 2 — Reverse Read: CM3 response -> SE legacy format (HTTP 200).",
+            "Case 3 — Extra Unknown Fields: Flags in log & applies saved policy (Drop / Pass / Block).",
+            "Case 4 — Missing Mapping: Quarantines unmapped route (HTTP 422).",
+            "Case 5 — Invalid Date Format: Rejects malformed date with exact rule diagnostic.",
+            "Case 6 — Missing Required ID: Blocks payload missing required key before System B write.",
+        ],
+        header_color=OT_DARK_NAVY, title_size=11.6, body_size=9.1,
+    )
+    add_framed_screenshot(b2, IMG_GATEWAY_6CASES, 6.10, 1.48, 6.55, 3.55, border_color=OT_TEAL)
+    add_card(
+        b2, 6.10, 5.18, 6.55, 1.62,
+        "Observable Integration Telemetry",
+        [
+            "Every request logs correlation ID, applied rules, unmapped fields, and target validation.",
+        ],
+        header_color=OT_TEAL, title_size=11.4, body_size=9.2,
+    )
+
+    # Retain sanitized deep-dive slides from existing deck after new backup slides
+    old_backup_indices = [7, 8, 9, 10, 11]
+    for b_idx in old_backup_indices:
+        sanitize_backup_slide(prs.slides[b_idx], title_prefix="Backup: ")
+
+    # New slides were appended at indices old_count .. old_count + 9 (8 main/back + 2 new backups)
+    new_main_and_back = list(range(old_count, old_count + 8))       # Slides 1..7 + Back cover
+    new_screenshot_backups = list(range(old_count + 8, old_count + 10))
+    reorder_and_prune_slides(prs, new_main_and_back + new_screenshot_backups + old_backup_indices)
 
     prs.save(str(OUTPUT_PPTX))
     return OUTPUT_PPTX
@@ -1018,4 +802,5 @@ def build_presentation() -> Path:
 
 if __name__ == "__main__":
     out = build_presentation()
-    print(f"Saved presentation to: {out}")
+    prs_check = Presentation(str(out))
+    print(f"Saved presentation to: {out} ({len(prs_check.slides)} total slides)")

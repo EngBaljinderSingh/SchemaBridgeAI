@@ -38,8 +38,8 @@
   </div>
 
   <div class="header-right">
-    <button class="btn btn-secondary btn-sm" (click)="showArchitectureGuide = true" data-aid="btn-show-guide" style="border-color: rgba(59, 130, 246, 0.4); background: rgba(59, 130, 246, 0.1);">
-      📖 Architecture &amp; How It Works
+    <button class="btn btn-secondary btn-sm" (click)="showArchitectureGuide = true" data-aid="btn-show-guide" style="border-color: rgba(59, 130, 246, 0.4); background: rgba(59, 130, 246, 0.1);" title="How SchemaBridge AI connects System A &amp; System B">
+      ❓ Help
     </button>
 
     <div class="aviator-status-pill" (click)="refreshAviatorHealth()" data-aid="aviator-status-pill" title="Click to ping Aviator ADT">
@@ -1561,54 +1561,76 @@
 
 <!-- MODAL: ARCHITECTURE & GATEWAY GUIDE -->
 <div *ngIf="showArchitectureGuide" class="modal-backdrop" data-aid="modal-architecture-guide">
-  <div class="modal-content animate-slide-up" style="max-width: 820px; max-height: 85vh; overflow-y: auto;">
-    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
+  <div class="modal-content animate-slide-up" style="max-width: 880px; max-height: 88vh; overflow-y: auto;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px;">
       <div>
         <h2 style="font-size: 1.35rem; margin: 0 0 6px 0;">How SchemaBridge AI Connects System A &amp; System B</h2>
         <p style="color: var(--text-secondary); font-size: 0.8125rem; margin: 0;">
-          Step-by-step architectural guide on configuring SchemaBridge between your disparate systems
+          Two-phase architecture: <strong>OpenText Aviator AI designs the mapping once</strong>; <strong>deterministic Java runs every live request</strong>.
         </p>
       </div>
       <button class="btn btn-secondary btn-sm" (click)="showArchitectureGuide = false">✕ Close</button>
     </div>
 
-    <!-- Architectural Diagram -->
-    <div style="background: rgba(0,0,0,0.35); border-radius: 8px; padding: 20px; margin-bottom: 20px; font-family: monospace; font-size: 0.8125rem; line-height: 1.6; border: 1px solid var(--border-subtle);">
-      <div style="color: #60a5fa; font-weight: bold; margin-bottom: 8px;">LIVE DATA FLOW:</div>
-      <div>[ System A (SE) ]</div>
-      <div>      │</div>
-      <div>      │ 1. Sends native payload (e.g. POST http://localhost:8080/api/projects/&#123;appId&#125;/apis/&#123;apiId&#125;/transform)</div>
-      <div>      ▼</div>
-      <div style="color: #34d399; font-weight: bold;">[ SchemaBridge AI Gateway ]</div>
-      <div>      ├─ 2. Inbound Contract Validation (Strict JSON / OpenAPI schema check)</div>
-      <div>      ├─ 3. Pure Java Deterministic Transformation (&lt;5ms runtime latency, ZERO LLM in hot path)</div>
-      <div>      └─ 4. Outbound Contract Validation (Validates output matches System B structure)</div>
-      <div>      │</div>
-      <div>      │ 5. Forwards converted payload or returns to caller</div>
-      <div>      ▼</div>
-      <div>[ System B (CCP) Target URL ]</div>
+    <!-- Visual 3-URL Flow Cards -->
+    <div style="display: grid; grid-template-columns: minmax(0, 1fr) 26px minmax(0, 1.35fr) 26px minmax(0, 1fr); gap: 8px; align-items: center; margin-bottom: 18px;">
+      <div style="background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.4); border-radius: 10px; padding: 12px; min-width: 0;">
+        <div style="font-size: 0.72rem; font-weight: 700; color: #93c5fd; margin-bottom: 4px;">1️⃣ SYSTEM A (CALLER URL #1)</div>
+        <div style="font-size: 0.78rem; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">Legacy / Host App (e.g., SE)</div>
+        <div style="font-size: 0.7rem; color: var(--text-secondary); line-height: 1.4;">
+          Sends native payload (<code>sub_id</code>, <code>dd/MM/yyyy</code>, <code>"Yes"</code>) to the Gateway URL — zero code changes required.
+        </div>
+      </div>
+
+      <div style="text-align: center; font-size: 1.15rem; color: #34d399; font-weight: 700;">⇄</div>
+
+      <div style="background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.45); border-radius: 10px; padding: 12px; min-width: 0;">
+        <div style="font-size: 0.72rem; font-weight: 700; color: #34d399; margin-bottom: 4px;">2️⃣ SCHEMABRIDGE GATEWAY (URL #2)</div>
+        <div style="font-size: 0.72rem; font-family: monospace; color: #6ee7b7; word-break: break-all; margin-bottom: 6px;">
+          /api/gateway/SEtoCM3/...
+        </div>
+        <div style="font-size: 0.7rem; color: var(--text-secondary); line-height: 1.4;">
+          • <strong>&lt;5ms Pure Java</strong> (Zero live AI cost)<br />
+          • Validates &amp; translates Write &amp; Reverse Read<br />
+          • Quarantines unmapped/bad payloads (<code>HTTP 422</code>)
+        </div>
+      </div>
+
+      <div style="text-align: center; font-size: 1.15rem; color: #c4b5fd; font-weight: 700;">⇄</div>
+
+      <div style="background: rgba(139, 92, 246, 0.12); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 10px; padding: 12px; min-width: 0;">
+        <div style="font-size: 0.72rem; font-weight: 700; color: #c4b5fd; margin-bottom: 4px;">3️⃣ SYSTEM B (TARGET URL #3)</div>
+        <div style="font-size: 0.78rem; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">Cloud / Target API (e.g., CM3)</div>
+        <div style="font-size: 0.7rem; color: var(--text-secondary); line-height: 1.4;">
+          Receives clean, contract-verified JSON (<code>subscriptionId</code>, ISO dates, booleans).
+        </div>
+      </div>
     </div>
 
-    <div style="display: flex; flex-direction: column; gap: 16px; font-size: 0.875rem; color: var(--text-secondary); line-height: 1.6;">
-      <div>
-        <strong style="color: var(--text-primary); display: block; margin-bottom: 4px;">1. Design-Time Contract Setup (Setup &amp; Schemas Tab)</strong>
-        Import a sample JSON or JSON Schema for System A and System B. This defines the <em>data contract</em> (field names, types, formats). It is not real customer data; it is the blueprint.
+    <!-- 4-Step End-to-End Lifecycle -->
+    <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5;">
+      <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 12px;">
+        <strong style="color: var(--text-primary); display: block; margin-bottom: 4px;">1. Setup &amp; Schemas (With or Without Swagger)</strong>
+        Upload or paste OpenAPI/Swagger specs (supports 100+ APIs via Endpoint Picker) or Sample JSON — or infer schemas directly from live Gateway traffic using <strong>⚡ Infer Schema from Live Request</strong>.
       </div>
-      <div>
-        <strong style="color: var(--text-primary); display: block; margin-bottom: 4px;">2. Mapping &amp; AI Assistance (Mapping Workspace Tab)</strong>
-        SchemaBridge's 5-level pipeline matches fields automatically (Exact, Normalized, Type, Arrays, Defaults). You can add custom rules or use Aviator AI to convert plain English commands. Once satisfied, click <strong>Publish Version</strong> to freeze the deterministic transformation contract.
+      <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 12px;">
+        <strong style="color: var(--text-primary); display: block; margin-bottom: 4px;">2. Mapping Studio (5-Level Funnel + Aviator AI)</strong>
+        Deterministic tiers (L1–L4) handle obvious matches free; <strong>OpenText Aviator AI</strong> (L5) resolves complex fields &amp; plain-English rules. Review ambiguous rules (&lt;90%), then <strong>Approve &amp; Publish</strong>.
       </div>
-      <div>
-        <strong style="color: var(--text-primary); display: block; margin-bottom: 4px;">3. API Registration (API Registry Tab)</strong>
-        Register the endpoints under your App (e.g. <code>POST /api/v1/customers</code> or <code>GET /api/v1/customers/&#123;id&#125;</code>) and point the downstream Target URL (e.g. <code>https://ccp.enterprise.internal/v1/customers</code>).
+      <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 12px;">
+        <strong style="color: var(--text-primary); display: block; margin-bottom: 4px;">3. API Registry (Manual or Bulk Auto-Map)</strong>
+        Use <strong>✨ Auto-Map APIs from Swagger</strong> to automatically pair and bulk-register endpoints across System A &amp; System B, or register individual routes with <strong>+ Register New API</strong>.
       </div>
-      <div>
-        <strong style="color: var(--text-primary); display: block; margin-bottom: 4px;">4. Runtime Invocation (Zero Code Changes in System B)</strong>
-        Configure System A to send requests to SchemaBridge instead of System B. SchemaBridge converts the payload in real-time according to the approved rules and delivers the translated payload to System B.
+      <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 12px;">
+        <strong style="color: var(--text-primary); display: block; margin-bottom: 4px;">4. Live Gateway &amp; Guardrails</strong>
+        Point System A to the Gateway URL (<code>/api/gateway/&#123;appSlug&#125;/...</code>). Live logs auto-refresh every 3 seconds, enforce unknown-field &amp; missing-mapping policies, and protect System B from bad data.
       </div>
     </div>
 
-    <div style="display: flex; justify-content: flex-end; margin-top: 24px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px; gap: 12px; flex-wrap: wrap;">
+      <span style="font-size: 0.75rem; color: #34d399; font-weight: 600;">
+        💡 Key Principle: AI designs the mapping once; deterministic Java safely executes every production request.
+      </span>
       <button class="btn btn-primary" (click)="showArchitectureGuide = false">Got it, Let's Build!</button>
     </div>
   </div>

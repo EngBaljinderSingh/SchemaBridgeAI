@@ -1,4 +1,4 @@
-import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from './services/api.service';
@@ -23,7 +23,7 @@ import { HOST_SYSTEM_A_SWAGGER, DESTINATION_SYSTEM_B_SWAGGER } from './samples/s
   templateUrl: './app.html',
   styleUrl: './app.css'
 })
-export class App implements OnInit {
+export class App implements OnInit, OnDestroy {
   activeTab: 'projects' | 'apis' | 'gateway' | 'setup' | 'mapping' | 'preview' | 'versions' | 'audit' = 'projects';
   projects: Project[] = [];
   selectedProject: Project | null = null;
@@ -46,6 +46,8 @@ export class App implements OnInit {
   gatewayMissingPolicy: string = 'STRICT_REJECT_422';
   isSavingGatewayPolicy: boolean = false;
   gatewayPolicySavedBanner: string = '';
+  autoRefreshGatewayLogs: boolean = true;
+  private gatewayPollTimer: ReturnType<typeof setInterval> | null = null;
 
   // Multi-API Registry State
   registeredApis: RegisteredApi[] = [];
@@ -115,6 +117,8 @@ export class App implements OnInit {
   targetTracePayload: string = '{\n  "sheetName": "The Hobbit",\n  "sheetYear": "1937",\n  "writer": "J.R.R. Tolkien",\n  "available": true\n}';
   isTracingSource: boolean = false;
   isTracingTarget: boolean = false;
+  sourceTraceMessage: string = '';
+  targetTraceMessage: string = '';
 
   // Selective 100 APIs Endpoint Picker State
   showEndpointPickerModal: boolean = false;
@@ -179,6 +183,18 @@ export class App implements OnInit {
     this.applyThemeClass();
     this.loadProjects();
     this.refreshAviatorHealth();
+    this.gatewayPollTimer = setInterval(() => {
+      if (this.autoRefreshGatewayLogs && this.selectedProject && this.activeTab === 'gateway') {
+        this.loadGatewayLogs(this.selectedProject.id);
+      }
+    }, 3000);
+  }
+
+  ngOnDestroy(): void {
+    if (this.gatewayPollTimer) {
+      clearInterval(this.gatewayPollTimer);
+      this.gatewayPollTimer = null;
+    }
   }
 
   toggleTheme(): void {
@@ -1089,11 +1105,19 @@ export class App implements OnInit {
   onSourceFileSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
     this.sourceSchemaFile = input.files && input.files.length > 0 ? input.files[0] : null;
+    if (this.sourceSchemaFile) {
+      this.uploadSourceSchemaFile();
+      input.value = '';
+    }
   }
 
   onTargetFileSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
     this.targetSchemaFile = input.files && input.files.length > 0 ? input.files[0] : null;
+    if (this.targetSchemaFile) {
+      this.uploadTargetSchemaFile();
+      input.value = '';
+    }
   }
 
   uploadSourceSchemaFile(): void {
@@ -1864,10 +1888,53 @@ export class App implements OnInit {
   }
 
   // Asymmetric Schema: Trace live JSON/cURL payload for system with NO Swagger
+  inferSchemaFromGatewayLog(glog: any): void {
+    if (!this.selectedProject || !glog?.requestPayload) return;
+    const rawJson = typeof glog.requestPayload === 'string'
+      ? glog.requestPayload
+      : JSON.stringify(glog.requestPayload, null, 2);
+    const isReverse = glog.direction === 'TARGET_TO_SOURCE';
+
+    this.api.tracePayload(this.selectedProject.id, {
+      payload: rawJson,
+      direction: isReverse ? 'TARGET_TO_SOURCE' : 'SOURCE_TO_TARGET',
+      systemName: isReverse
+        ? (this.selectedProject.targetSystemName || 'System B')
+        : (this.selectedProject.sourceSystemName || 'System A'),
+      endpointPath: glog.endpointPath
+    }).subscribe({
+      next: (res) => {
+        if (isReverse) {
+          this.targetInputMode = 'SWAGGER';
+          this.targetSchemaType = 'SAMPLE_JSON';
+          this.targetTracePayload = rawJson;
+          this.targetSchemaInput = rawJson;
+          this.targetFields = res.fields || [];
+          this.targetTraceMessage = `✅ Learned ${this.targetFields.length} fields directly from live Gateway request (${glog.correlationId}).`;
+        } else {
+          this.sourceInputMode = 'SWAGGER';
+          this.sourceSchemaType = 'SAMPLE_JSON';
+          this.sourceTracePayload = rawJson;
+          this.sourceSchemaInput = rawJson;
+          this.sourceFields = res.fields || [];
+          this.sourceTraceMessage = `✅ Learned ${this.sourceFields.length} fields directly from live Gateway request (${glog.correlationId}).`;
+        }
+        this.activeTab = 'setup';
+        this.loadProjectData(this.selectedProject!.id);
+        this.cdr.detectChanges();
+      },
+      error: (err) => {
+        this.setupErrorMessage = 'Failed to infer schema from Gateway log: ' + (err?.error?.message || err?.message);
+        this.cdr.detectChanges();
+      }
+    });
+  }
+
   traceSourcePayload(): void {
     if (!this.selectedProject || !this.sourceTracePayload.trim()) return;
     this.isTracingSource = true;
     this.setupErrorMessage = '';
+    this.sourceTraceMessage = '';
     this.cdr.detectChanges();
 
     this.api.tracePayload(this.selectedProject.id, {
@@ -1876,10 +1943,11 @@ export class App implements OnInit {
       systemName: this.selectedProject.sourceSystemName || 'System A'
     }).subscribe({
       next: (res) => {
-        this.sourceFields = res.fields;
+        this.sourceFields = res.fields || [];
         this.sourceSchemaType = res.schemaType;
         this.sourceSchemaInput = this.sourceTracePayload;
         this.isTracingSource = false;
+        this.sourceTraceMessage = `✅ Traced ${this.sourceFields.length} fields & inferred types for System A. Next: set System B on the right, then click "Generate AI Mappings".`;
         this.loadProjectData(this.selectedProject!.id);
         this.cdr.detectChanges();
       },
@@ -1895,6 +1963,7 @@ export class App implements OnInit {
     if (!this.selectedProject || !this.targetTracePayload.trim()) return;
     this.isTracingTarget = true;
     this.setupErrorMessage = '';
+    this.targetTraceMessage = '';
     this.cdr.detectChanges();
 
     this.api.tracePayload(this.selectedProject.id, {
@@ -1903,10 +1972,11 @@ export class App implements OnInit {
       systemName: this.selectedProject.targetSystemName || 'System B'
     }).subscribe({
       next: (res) => {
-        this.targetFields = res.fields;
+        this.targetFields = res.fields || [];
         this.targetSchemaType = res.schemaType;
         this.targetSchemaInput = this.targetTracePayload;
         this.isTracingTarget = false;
+        this.targetTraceMessage = `✅ Traced ${this.targetFields.length} fields & inferred types for System B. Ready to click "Generate AI Mappings"!`;
         this.loadProjectData(this.selectedProject!.id);
         this.cdr.detectChanges();
       },

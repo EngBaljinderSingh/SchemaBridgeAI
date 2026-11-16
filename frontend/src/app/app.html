@@ -15,7 +15,7 @@
       <button class="nav-tab-btn" [class.active]="activeTab === 'apis'" (click)="activeTab = 'apis'" data-aid="nav-tab-apis">
         API Registry ({{ registeredApis.length }})
       </button>
-      <button class="nav-tab-btn" [class.active]="activeTab === 'gateway'" (click)="activeTab = 'gateway'" data-aid="nav-tab-gateway"
+      <button class="nav-tab-btn" [class.active]="activeTab === 'gateway'" (click)="activeTab = 'gateway'; selectedProject && loadGatewayLogs(selectedProject.id)" data-aid="nav-tab-gateway"
               style="border-color: rgba(16, 185, 129, 0.35);">
         🌐 Live Gateway &amp; Logs ({{ gatewayLogs.length }})
       </button>
@@ -277,7 +277,17 @@
           Switch projects below or trigger any of the 6 enterprise cases to see how requests route across the 3 URLs in &lt;5ms.
         </p>
       </div>
-      <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+      <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+        <button class="btn btn-secondary btn-sm"
+                (click)="autoRefreshGatewayLogs = !autoRefreshGatewayLogs"
+                [style.borderColor]="autoRefreshGatewayLogs ? 'rgba(16, 185, 129, 0.5)' : 'var(--border-subtle)'"
+                [style.color]="autoRefreshGatewayLogs ? '#34d399' : 'var(--text-muted)'"
+                title="Automatically poll Live Gateway logs every 3 seconds">
+          {{ autoRefreshGatewayLogs ? '● Live Auto-Refresh (3s)' : '○ Auto-Refresh Paused' }}
+        </button>
+        <button class="btn btn-secondary btn-sm" (click)="selectedProject && loadGatewayLogs(selectedProject.id)" title="Refresh logs now">
+          🔄 Refresh
+        </button>
         <button class="btn btn-primary" (click)="runAllGatewayScenarios()" [disabled]="isSimulatingGateway"
                 style="background: linear-gradient(135deg, #059669, #10b981);" data-aid="btn-run-all-6-cases">
           {{ isSimulatingGateway ? 'Executing All 6 Cases...' : '▶ Run All 6 Enterprise Cases Now' }}
@@ -476,9 +486,18 @@
       <!-- 3-Column Trace Panels -->
       <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); gap: 16px;">
         <!-- Col 1: Incoming Payload from URL #1 -->
-        <div style="min-width: 0; background: rgba(0,0,0,0.3); border-radius: 8px; padding: 12px; border: 1px solid rgba(255,255,255,0.06);">
-          <div style="font-size: 0.75rem; font-weight: 700; color: #93c5fd; margin-bottom: 4px;">
-            1️⃣ Incoming Payload (From Caller URL #1)
+        <div style="min-width: 0; background: rgba(0,0,0,0.3); border-radius: 8px; padding: 12px; border: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column;">
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap;">
+            <div style="font-size: 0.75rem; font-weight: 700; color: #93c5fd;">
+              1️⃣ Incoming Payload (From Caller URL #1)
+            </div>
+            <button *ngIf="selectedGatewayLog.requestPayload"
+                    class="btn btn-secondary btn-sm"
+                    (click)="inferSchemaFromGatewayLog(selectedGatewayLog)"
+                    style="font-size: 0.68rem; padding: 2px 8px; border-color: rgba(52, 211, 153, 0.45); color: #34d399;"
+                    title="Auto-learn System A/B schema directly from this live Gateway request">
+              ⚡ Infer Schema from Live Request
+            </button>
           </div>
           <div style="font-size: 0.68rem; color: var(--text-muted); margin-bottom: 8px; word-break: break-all;">
             <code>{{ selectedGatewayLog.sourceUrl }}</code>
@@ -622,7 +641,7 @@
           ⚡ Load Sample Swagger (System A &amp; B)
         </button>
         <button class="btn btn-primary" (click)="proceedToMapping()" [disabled]="isImportingSchemas" data-aid="btn-proceed-to-mapping">
-          {{ isImportingSchemas ? 'Importing & Generating...' : 'Proceed to Mapping' }}
+          {{ isImportingSchemas ? 'Importing & Generating...' : '⚡ Generate AI Mappings →' }}
         </button>
       </div>
     </div>
@@ -695,11 +714,16 @@
             <h3>Source Schema (Host System A)</h3>
             <span style="font-size: 0.75rem; color: var(--text-muted);">{{ selectedProject?.sourceSystemName || 'System A' }} specification</span>
           </div>
-          <div style="display: flex; gap: 8px; align-items: center;">
-            <button *ngIf="sourceInputMode === 'SWAGGER'" class="btn btn-secondary btn-sm" (click)="loadHostSwaggerSample()" [disabled]="isImportingSchemas" style="font-size: 0.75rem; border-color: rgba(52, 211, 153, 0.4); color: #34d399;" data-aid="btn-load-host-swagger">
+          <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+            <button class="btn btn-secondary btn-sm" (click)="loadHostSwaggerSample()" [disabled]="isImportingSchemas" style="font-size: 0.75rem; border-color: rgba(52, 211, 153, 0.4); color: #34d399;" data-aid="btn-load-host-swagger">
               ⚡ Load Host Swagger
             </button>
-            <select *ngIf="sourceInputMode === 'SWAGGER'" [(ngModel)]="sourceSchemaType" style="width: 140px;" data-aid="select-source-type">
+            <button class="btn btn-secondary btn-sm" (click)="openEndpointPicker('SOURCE_TO_TARGET')"
+                    [disabled]="isParsingEndpoints" title="Select specific endpoints if specification contains multiple or 100+ APIs"
+                    style="border-color: rgba(99, 102, 241, 0.4); color: #a5b4fc; font-size: 0.75rem;">
+              🔍 Pick Endpoints
+            </button>
+            <select [(ngModel)]="sourceSchemaType" style="width: 175px; min-width: 165px;" data-aid="select-source-type">
               <option value="SAMPLE_JSON">Sample JSON</option>
               <option value="JSON_SCHEMA">JSON Schema</option>
               <option value="OPENAPI">OpenAPI 3.0</option>
@@ -707,58 +731,34 @@
           </div>
         </div>
 
-        <!-- Mode Toggle Pill & Endpoint Picker Trigger -->
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-          <div class="mode-toggle">
-            <button class="mode-toggle-btn" [class.active]="sourceInputMode === 'SWAGGER'" (click)="sourceInputMode = 'SWAGGER'">
-              📜 OpenAPI / Swagger
-            </button>
-            <button class="mode-toggle-btn" [class.active]="sourceInputMode === 'TRACE'" (click)="sourceInputMode = 'TRACE'">
-              ⚡ Live Trace (NO Swagger)
-            </button>
-          </div>
-          <button *ngIf="sourceInputMode === 'SWAGGER'" class="btn btn-secondary btn-sm" (click)="openEndpointPicker('SOURCE_TO_TARGET')"
-                  [disabled]="isParsingEndpoints" title="Select specific endpoints if specification contains multiple or 100+ APIs"
-                  style="border-color: rgba(99, 102, 241, 0.4); color: #a5b4fc; font-size: 0.75rem;">
-            🔍 Pick Endpoints (100 APIs)
-          </button>
-        </div>
-
-        <!-- SWAGGER MODE CONTENT -->
-        <div *ngIf="sourceInputMode === 'SWAGGER'" style="display: flex; flex-direction: column; flex: 1;">
-          <textarea class="editor-box code-editor" [(ngModel)]="sourceSchemaInput" placeholder="Paste source JSON payload or Swagger/OpenAPI spec..." data-aid="input-source-schema"></textarea>
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px;">
+        <div style="display: flex; flex-direction: column; flex: 1;">
+          <textarea class="editor-box code-editor" [(ngModel)]="sourceSchemaInput" placeholder="Paste source JSON payload, JSON Schema, or OpenAPI/Swagger spec (or infer from Live Gateway Logs)..." data-aid="input-source-schema"></textarea>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px; gap: 8px; flex-wrap: wrap;">
             <span style="font-size: 0.75rem; color: var(--accent-secondary);">Extracted fields: {{ sourceFields.length }}</span>
-            <button class="btn btn-secondary btn-sm" (click)="importSource()" data-aid="btn-import-source">
-              Import &amp; Extract Fields
-            </button>
-          </div>
-          <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-color, rgba(255,255,255,0.08)); display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
             <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-              <span style="font-size: 0.75rem; color: var(--text-muted);">Upload (.json/.yaml):</span>
-              <input type="file" accept=".json,.yaml,.yml" (change)="onSourceFileSelected($event)" data-aid="input-source-file" />
-              <button class="btn btn-secondary btn-sm" (click)="uploadSourceSchemaFile()" [disabled]="!sourceSchemaFile || isUploadingSourceFile" data-aid="btn-upload-source-file">
-                {{ isUploadingSourceFile ? 'Uploading...' : 'Upload File' }}
+              <input #sourceFileInput type="file" accept=".json,.yaml,.yml" (change)="onSourceFileSelected($event)" style="display: none;" data-aid="input-source-file" />
+              <button class="btn btn-secondary btn-sm" (click)="sourceFileInput.click()" [disabled]="isUploadingSourceFile" data-aid="btn-upload-source-file" title="Upload OpenAPI/Swagger or JSON file">
+                {{ isUploadingSourceFile ? '⏳ Uploading...' : '📁 Upload File' }}
+              </button>
+              <button class="btn btn-secondary btn-sm" (click)="downloadSwaggerFile('host')" title="Download Host Sample Swagger Spec">
+                📥
+              </button>
+              <button class="btn btn-primary btn-sm" (click)="importSource()" data-aid="btn-import-source">
+                Import &amp; Extract Fields
               </button>
             </div>
-            <button class="btn btn-secondary btn-sm" (click)="downloadSwaggerFile('host')" title="Download Host Swagger Spec" style="font-size: 0.75rem;">
-              📥 Download Sample Spec
-            </button>
           </div>
-        </div>
 
-        <!-- LIVE TRACE MODE CONTENT (NO SWAGGER) -->
-        <div *ngIf="sourceInputMode === 'TRACE'" style="display: flex; flex-direction: column; flex: 1;">
-          <div style="font-size: 0.8125rem; color: var(--text-secondary); line-height: 1.4; margin-bottom: 8px; background: rgba(0,0,0,0.25); padding: 10px; border-radius: 6px; border: 1px dashed rgba(255,255,255,0.1);">
-            💡 <strong>Asymmetric Support:</strong> If System A has NO Swagger/OpenAPI docs, paste a live HTTP request/response JSON payload or cURL body. SchemaBridge AI will automatically trace types and reconstruct the schema.
-          </div>
-          <textarea class="editor-box code-editor" [(ngModel)]="sourceTracePayload" placeholder="Paste live sample JSON payload..." style="height: 320px;"></textarea>
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px;">
-            <span style="font-size: 0.75rem; color: var(--accent-secondary);">Extracted fields: {{ sourceFields.length }}</span>
-            <button class="btn btn-primary btn-sm" (click)="traceSourcePayload()" [disabled]="isTracingSource || !sourceTracePayload.trim()">
-              <span *ngIf="isTracingSource" class="spinner" style="width: 12px; height: 12px; margin-right: 4px;"></span>
-              {{ isTracingSource ? 'Tracing...' : '⚡ Trace Payload &amp; Infer Schema' }}
-            </button>
+          <!-- Live Extracted Fields Preview -->
+          <div *ngIf="sourceTraceMessage || sourceFields.length > 0" style="margin-top: 12px; padding: 10px; border-radius: 6px; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3);">
+            <div style="font-size: 0.75rem; color: #34d399; font-weight: 600; margin-bottom: 6px;">
+              {{ sourceTraceMessage || ('✅ Extracted ' + sourceFields.length + ' live field(s) for System A:') }}
+            </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 5px; max-height: 110px; overflow-y: auto;">
+              <span *ngFor="let sf of sourceFields" style="font-size: 0.7rem; padding: 2px 7px; border-radius: 4px; background: rgba(16, 185, 129, 0.18); color: #6ee7b7; font-family: monospace;">
+                {{ sf.fieldPath }} <span style="opacity: 0.75;">({{ sf.dataType }})</span>
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -770,70 +770,51 @@
             <h3>Target Schema (Destination System B)</h3>
             <span style="font-size: 0.75rem; color: var(--text-muted);">{{ selectedProject?.targetSystemName || 'System B' }} specification</span>
           </div>
-          <div style="display: flex; gap: 8px; align-items: center;">
-            <button *ngIf="targetInputMode === 'SWAGGER'" class="btn btn-secondary btn-sm" (click)="loadDestinationSwaggerSample()" [disabled]="isImportingSchemas" style="font-size: 0.75rem; border-color: rgba(52, 211, 153, 0.4); color: #34d399;" data-aid="btn-load-destination-swagger">
+          <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+            <button class="btn btn-secondary btn-sm" (click)="loadDestinationSwaggerSample()" [disabled]="isImportingSchemas" style="font-size: 0.75rem; border-color: rgba(52, 211, 153, 0.4); color: #34d399;" data-aid="btn-load-destination-swagger">
               ⚡ Load Destination Swagger
             </button>
-            <select *ngIf="targetInputMode === 'SWAGGER'" [(ngModel)]="targetSchemaType" style="width: 140px;" data-aid="select-target-type">
-              <option value="SAMPLE_JSON">Sample JSON / Contract</option>
+            <button class="btn btn-secondary btn-sm" (click)="openEndpointPicker('TARGET_TO_SOURCE')"
+                    [disabled]="isParsingEndpoints" title="Select specific endpoints if specification contains multiple or 100+ APIs"
+                    style="border-color: rgba(99, 102, 241, 0.4); color: #a5b4fc; font-size: 0.75rem;">
+              🔍 Pick Endpoints
+            </button>
+            <select [(ngModel)]="targetSchemaType" style="width: 175px; min-width: 165px;" data-aid="select-target-type">
+              <option value="SAMPLE_JSON">Sample JSON</option>
               <option value="JSON_SCHEMA">JSON Schema</option>
               <option value="OPENAPI">OpenAPI 3.0</option>
             </select>
           </div>
         </div>
 
-        <!-- Mode Toggle Pill & Endpoint Picker Trigger -->
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-          <div class="mode-toggle">
-            <button class="mode-toggle-btn" [class.active]="targetInputMode === 'SWAGGER'" (click)="targetInputMode = 'SWAGGER'">
-              📜 OpenAPI / Swagger
-            </button>
-            <button class="mode-toggle-btn" [class.active]="targetInputMode === 'TRACE'" (click)="targetInputMode = 'TRACE'">
-              ⚡ Live Trace (NO Swagger)
-            </button>
-          </div>
-          <button *ngIf="targetInputMode === 'SWAGGER'" class="btn btn-secondary btn-sm" (click)="openEndpointPicker('TARGET_TO_SOURCE')"
-                  [disabled]="isParsingEndpoints" title="Select specific endpoints if specification contains multiple or 100+ APIs"
-                  style="border-color: rgba(99, 102, 241, 0.4); color: #a5b4fc; font-size: 0.75rem;">
-            🔍 Pick Endpoints (100 APIs)
-          </button>
-        </div>
-
-        <!-- SWAGGER MODE CONTENT -->
-        <div *ngIf="targetInputMode === 'SWAGGER'" style="display: flex; flex-direction: column; flex: 1;">
-          <textarea class="editor-box code-editor" [(ngModel)]="targetSchemaInput" placeholder="Paste target schema or Swagger/OpenAPI spec..." data-aid="input-target-schema"></textarea>
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px;">
+        <div style="display: flex; flex-direction: column; flex: 1;">
+          <textarea class="editor-box code-editor" [(ngModel)]="targetSchemaInput" placeholder="Paste target JSON payload, JSON Schema, or OpenAPI/Swagger spec (or infer from Live Gateway Logs)..." data-aid="input-target-schema"></textarea>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px; gap: 8px; flex-wrap: wrap;">
             <span style="font-size: 0.75rem; color: var(--accent-secondary);">Target fields: {{ targetFields.length }}</span>
-            <button class="btn btn-secondary btn-sm" (click)="importTarget()" data-aid="btn-import-target">
-              Import &amp; Extract Fields
-            </button>
-          </div>
-          <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-color, rgba(255,255,255,0.08)); display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
             <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-              <span style="font-size: 0.75rem; color: var(--text-muted);">Upload (.json/.yaml):</span>
-              <input type="file" accept=".json,.yaml,.yml" (change)="onTargetFileSelected($event)" data-aid="input-target-file" />
-              <button class="btn btn-secondary btn-sm" (click)="uploadTargetSchemaFile()" [disabled]="!targetSchemaFile || isUploadingTargetFile" data-aid="btn-upload-target-file">
-                {{ isUploadingTargetFile ? 'Uploading...' : 'Upload File' }}
+              <input #targetFileInput type="file" accept=".json,.yaml,.yml" (change)="onTargetFileSelected($event)" style="display: none;" data-aid="input-target-file" />
+              <button class="btn btn-secondary btn-sm" (click)="targetFileInput.click()" [disabled]="isUploadingTargetFile" data-aid="btn-upload-target-file" title="Upload OpenAPI/Swagger or JSON file">
+                {{ isUploadingTargetFile ? '⏳ Uploading...' : '📁 Upload File' }}
+              </button>
+              <button class="btn btn-secondary btn-sm" (click)="downloadSwaggerFile('destination')" title="Download Destination Sample Swagger Spec">
+                📥
+              </button>
+              <button class="btn btn-primary btn-sm" (click)="importTarget()" data-aid="btn-import-target">
+                Import &amp; Extract Fields
               </button>
             </div>
-            <button class="btn btn-secondary btn-sm" (click)="downloadSwaggerFile('destination')" title="Download Destination Swagger Spec" style="font-size: 0.75rem;">
-              📥 Download Sample Spec
-            </button>
           </div>
-        </div>
 
-        <!-- LIVE TRACE MODE CONTENT (NO SWAGGER) -->
-        <div *ngIf="targetInputMode === 'TRACE'" style="display: flex; flex-direction: column; flex: 1;">
-          <div style="font-size: 0.8125rem; color: var(--text-secondary); line-height: 1.4; margin-bottom: 8px; background: rgba(0,0,0,0.25); padding: 10px; border-radius: 6px; border: 1px dashed rgba(255,255,255,0.1);">
-            💡 <strong>Asymmetric Support:</strong> If System B has NO Swagger/OpenAPI docs, paste a live HTTP request/response JSON payload or cURL body. SchemaBridge AI will automatically trace types and reconstruct the schema.
-          </div>
-          <textarea class="editor-box code-editor" [(ngModel)]="targetTracePayload" placeholder="Paste live sample JSON payload..." style="height: 320px;"></textarea>
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px;">
-            <span style="font-size: 0.75rem; color: var(--accent-secondary);">Target fields: {{ targetFields.length }}</span>
-            <button class="btn btn-primary btn-sm" (click)="traceTargetPayload()" [disabled]="isTracingTarget || !targetTracePayload.trim()">
-              <span *ngIf="isTracingTarget" class="spinner" style="width: 12px; height: 12px; margin-right: 4px;"></span>
-              {{ isTracingTarget ? 'Tracing...' : '⚡ Trace Payload &amp; Infer Schema' }}
-            </button>
+          <!-- Live Extracted Fields Preview -->
+          <div *ngIf="targetTraceMessage || targetFields.length > 0" style="margin-top: 12px; padding: 10px; border-radius: 6px; background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.3);">
+            <div style="font-size: 0.75rem; color: #93c5fd; font-weight: 600; margin-bottom: 6px;">
+              {{ targetTraceMessage || ('✅ Extracted ' + targetFields.length + ' live field(s) for System B:') }}
+            </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 5px; max-height: 110px; overflow-y: auto;">
+              <span *ngFor="let tf of targetFields" style="font-size: 0.7rem; padding: 2px 7px; border-radius: 4px; background: rgba(59, 130, 246, 0.18); color: #93c5fd; font-family: monospace;">
+                {{ tf.fieldPath }} <span style="opacity: 0.75;">({{ tf.dataType }})</span>
+              </span>
+            </div>
           </div>
         </div>
       </div>

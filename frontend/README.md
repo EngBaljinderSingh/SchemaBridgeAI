@@ -12,6 +12,17 @@ ng serve
 
 Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
 
+API requests use the same-origin `/api` path. The development server proxies these requests to `http://localhost:8080`; production Nginx already proxies `/api/` to the backend.
+
+To use alternate local ports in PowerShell:
+
+```powershell
+$env:SCHEMABRIDGE_API_TARGET = 'http://127.0.0.1:8081'
+npm start -- --host 127.0.0.1 --port 4300
+```
+
+Start a backend on that target port before using the application. The target environment variable is read when the development server starts.
+
 ## Code scaffolding
 
 Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
@@ -41,18 +52,26 @@ This will compile your project and store the build artifacts in the `dist/` dire
 To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
 
 ```bash
-ng test
+npm test -- --watch=false
 ```
 
 ## Running end-to-end tests
 
-For end-to-end (e2e) testing, run:
+Start the backend and frontend, then run the existing Chromium browser and HTTP lifecycle tests:
 
 ```bash
-ng e2e
+npx playwright install chromium
+npx playwright test
 ```
 
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
+The default frontend URL is `http://localhost:4200`. For an alternate frontend port in PowerShell:
+
+```powershell
+$env:SCHEMABRIDGE_E2E_BASE_URL = 'http://127.0.0.1:4300'
+npx playwright test
+```
+
+The tests create isolated test projects. They do not require Aviator to be available when the backend's configured fallback is enabled; this does not verify live AI connectivity or production broker delivery.
 
 ## Additional Resources
 

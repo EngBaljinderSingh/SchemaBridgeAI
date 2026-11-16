@@ -10,10 +10,14 @@
   <div class="header-center">
     <nav class="nav-tabs" data-aid="nav-tabs">
       <button class="nav-tab-btn" [class.active]="activeTab === 'projects'" (click)="activeTab = 'projects'" data-aid="nav-tab-projects">
-        Apps
+        Apps ({{ projects.length }})
       </button>
       <button class="nav-tab-btn" [class.active]="activeTab === 'apis'" (click)="activeTab = 'apis'" data-aid="nav-tab-apis">
         API Registry ({{ registeredApis.length }})
+      </button>
+      <button class="nav-tab-btn" [class.active]="activeTab === 'gateway'" (click)="activeTab = 'gateway'" data-aid="nav-tab-gateway"
+              style="border-color: rgba(16, 185, 129, 0.35);">
+        🌐 Live Gateway &amp; Logs ({{ gatewayLogs.length }})
       </button>
       <button class="nav-tab-btn" [class.active]="activeTab === 'setup'" (click)="activeTab = 'setup'" data-aid="nav-tab-setup">
         Setup &amp; Schemas
@@ -51,23 +55,59 @@
 
 <main class="main-container">
 
+  <!-- Toast Banner when a URL or cURL is copied -->
+  <div *ngIf="copiedUrlBanner" class="glass-card" style="margin-bottom: 16px; padding: 10px 18px; background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.4); color: #34d399; font-size: 0.8125rem; display: flex; justify-content: space-between; align-items: center;">
+    <span>✓ {{ copiedUrlBanner }}</span>
+    <button class="btn btn-secondary btn-sm" (click)="copiedUrlBanner = ''">✕</button>
+  </div>
+
   <!-- TAB 1: PROJECTS LIST -->
   <div *ngIf="activeTab === 'projects'" class="animate-slide-up" data-aid="view-projects">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
       <div>
-        <h2>Integration Projects &amp; Apps</h2>
-        <p style="color: var(--text-secondary); font-size: 0.875rem;">Manage schema translation pipelines between disparate systems</p>
+        <h2>Integration Projects &amp; 3-URL Gateway Hub</h2>
+        <p style="color: var(--text-secondary); font-size: 0.875rem;">
+          Each project bridges <strong>1. Source System URL</strong> &rarr; <strong>2. SchemaBridge Gateway URL (This App)</strong> &rarr; <strong>3. Target System URL</strong>
+        </p>
       </div>
-      <button class="btn btn-primary" (click)="showNewProjectModal = true" data-aid="btn-create-project-main">
-        + Create Integration Project
-      </button>
+      <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <button class="btn btn-secondary" (click)="seedTwoSampleProjects(true)" [disabled]="isSeedingDemoProjects"
+                style="border-color: rgba(52, 211, 153, 0.45); color: #34d399;" data-aid="btn-seed-two-samples">
+          {{ isSeedingDemoProjects ? 'Seeding 2 Projects & 6 Cases...' : '⚡ Reset / Seed 2 Sample Projects (All 6 Cases)' }}
+        </button>
+        <button class="btn btn-primary" (click)="showNewProjectModal = true" data-aid="btn-create-project-main">
+          + Create Integration Project
+        </button>
+      </div>
     </div>
 
-    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 20px;">
+    <!-- Executive 3-URL Architecture Strip -->
+    <div class="glass-card" style="margin-bottom: 22px; padding: 16px 20px; background: rgba(59, 130, 246, 0.08); border-color: rgba(59, 130, 246, 0.3);">
+      <div style="font-size: 0.875rem; font-weight: 700; color: #60a5fa; margin-bottom: 8px;">
+        🌐 How Callers Use the 3 URLs in Production:
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; font-size: 0.78rem; color: var(--text-secondary);">
+        <div style="background: rgba(0,0,0,0.28); padding: 10px 12px; border-radius: 6px; border-left: 3px solid #60a5fa;">
+          <strong style="color: var(--text-primary); display: block;">1️⃣ Source System A URL (Origin / Caller)</strong>
+          Legacy POS / Subscription Engine (SE). Instead of calling System B directly, System A sends its native payload to <strong>URL #2 (SchemaBridge Gateway)</strong>.
+        </div>
+        <div style="background: rgba(0,0,0,0.28); padding: 10px 12px; border-radius: 6px; border-left: 3px solid #34d399;">
+          <strong style="color: #34d399; display: block;">2️⃣ SchemaBridge Gateway URL (This App Proxy)</strong>
+          <code>http://localhost:8080/api/gateway/&#123;projectId&#125;/...</code><br>
+          Executes published rules in <strong>&lt;5ms pure Java (0 AI at runtime)</strong>, validates schema, logs errors/unmapped fields, and routes traffic.
+        </div>
+        <div style="background: rgba(0,0,0,0.28); padding: 10px 12px; border-radius: 6px; border-left: 3px solid #a855f7;">
+          <strong style="color: var(--text-primary); display: block;">3️⃣ Target System B URL (Destination)</strong>
+          Cloud ERP / Metering (CM3). Receives 100% schema-validated modern payloads on WRITE, or supplies records for reverse READ translation.
+        </div>
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(460px, 1fr)); gap: 20px;">
       <div *ngFor="let proj of projects" class="glass-card" style="padding: 24px; cursor: pointer;"
            [style.borderColor]="selectedProject?.id === proj.id ? 'var(--border-focus)' : 'var(--border-subtle)'"
            (click)="selectProject(proj)" [attr.data-aid]="'project-card-' + proj.id">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
           <h3 style="font-size: 1.125rem;">{{ proj.name }}</h3>
           <div style="display: flex; gap: 8px; align-items: center;">
             <span class="badge" [class.badge-high]="proj.status === 'ACTIVE'" [class.badge-medium]="proj.status === 'DRAFT'">
@@ -75,22 +115,45 @@
             </span>
           </div>
         </div>
-        <p style="color: var(--text-secondary); font-size: 0.8125rem; margin-bottom: 20px; min-height: 38px;">
+        <p style="color: var(--text-secondary); font-size: 0.8125rem; margin-bottom: 14px; min-height: 36px;">
           {{ proj.description || 'No description provided.' }}
         </p>
 
-        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: var(--text-muted); border-top: 1px solid var(--border-subtle); padding-top: 14px;">
+        <!-- 3 URLs Display on Project Card -->
+        <div style="background: rgba(0,0,0,0.32); border: 1px solid rgba(255,255,255,0.07); border-radius: 8px; padding: 10px 12px; margin-bottom: 16px; font-size: 0.74rem; line-height: 1.65;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="color: var(--text-muted);">1️⃣ Source ({{ proj.sourceSystemName || 'System A' }}):</span>
+            <code style="color: #93c5fd;">{{ proj.sourceSystemUrl || 'http://localhost:8080/mock/system-a' }}</code>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 3px;">
+            <span style="color: #34d399; font-weight: 600;">2️⃣ Gateway Proxy (Call This):</span>
+            <code style="color: #34d399; font-weight: 600;">{{ proj.gatewayUrl || ('http://localhost:8080/api/gateway/' + proj.id) }}</code>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 3px;">
+            <span style="color: var(--text-muted);">3️⃣ Target ({{ proj.targetSystemName || 'System B' }}):</span>
+            <code style="color: #c4b5fd;">{{ proj.targetSystemUrl || 'http://localhost:8080/mock/system-b' }}</code>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: var(--text-muted); border-top: 1px solid var(--border-subtle); padding-top: 14px; flex-wrap: wrap; gap: 8px;">
           <div>
             <span>Versions: <strong>{{ proj.mappingVersionCount }}</strong></span>
-            <span style="margin-left: 10px;">Latest: <strong>{{ proj.latestPublishedVersion ? 'v' + proj.latestPublishedVersion : 'None' }}</strong></span>
+            <span style="margin-left: 10px;">Published: <strong>{{ proj.latestPublishedVersion ? 'v' + proj.latestPublishedVersion : 'None' }}</strong></span>
           </div>
-          <div style="display: flex; gap: 8px;">
-            <button class="btn btn-secondary btn-sm" (click)="selectProject(proj); activeTab = 'apis'" data-aid="btn-open-project">
-              Open
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button class="btn btn-primary btn-sm" (click)="selectProject(proj); activeTab = 'gateway'; $event.stopPropagation()"
+                    style="background: linear-gradient(135deg, #059669, #10b981);" data-aid="btn-open-gateway">
+              🌐 Live Gateway &amp; 6 Cases
+            </button>
+            <button class="btn btn-secondary btn-sm" (click)="selectProject(proj); activeTab = 'apis'; $event.stopPropagation()" data-aid="btn-open-project">
+              API Registry
+            </button>
+            <button class="btn btn-secondary btn-sm" (click)="selectProject(proj); activeTab = 'mapping'; $event.stopPropagation()">
+              Mappings
             </button>
             <button class="btn btn-sm" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);"
                     (click)="deleteProject(proj, $event)" [attr.data-aid]="'btn-delete-project-' + proj.id" title="Delete App">
-              🗑️ Delete
+              🗑️
             </button>
           </div>
         </div>
@@ -100,14 +163,17 @@
 
   <!-- TAB: API REGISTRY FOR SELECTED APP -->
   <div *ngIf="activeTab === 'apis'" class="animate-slide-up" data-aid="view-apis">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px;">
       <div>
-        <h2>Registered APIs for {{ selectedProject?.name || 'App' }}</h2>
+        <h2>Registered APIs &amp; 3-URL Routing for {{ selectedProject?.name || 'App' }}</h2>
         <p style="color: var(--text-secondary); font-size: 0.875rem;">
-          Register and configure endpoints connecting {{ selectedProject?.name }} with isolated schemas, HTTP methods, and mapping rules.
+          Each API exposes a dedicated <strong>SchemaBridge Gateway URL (#2)</strong> that bridges <strong>Source URL (#1)</strong> and <strong>Target URL (#3)</strong>.
         </p>
       </div>
       <div style="display: flex; gap: 10px;">
+        <button class="btn btn-secondary" (click)="activeTab = 'gateway'" style="border-color: rgba(16, 185, 129, 0.4); color: #34d399;">
+          🌐 Open Live Gateway &amp; Error Logs ({{ gatewayLogs.length }})
+        </button>
         <button *ngIf="registeredApis.length === 0" class="btn btn-secondary" (click)="loadSampleApisForApp()" data-aid="btn-load-sample-apis">
           ⚡ Load Sample APIs (Create &amp; Get)
         </button>
@@ -131,7 +197,7 @@
     </div>
 
     <!-- APIs Grid -->
-    <div *ngIf="registeredApis.length > 0" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 20px;">
+    <div *ngIf="registeredApis.length > 0" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 20px;">
       <div *ngFor="let api of registeredApis" class="glass-card" style="padding: 24px; display: flex; flex-direction: column; justify-content: space-between;">
         <div>
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
@@ -142,32 +208,375 @@
               </span>
               <strong style="font-family: monospace; font-size: 0.9375rem;">{{ api.endpointPath }}</strong>
             </div>
-            <span class="badge" [class.badge-high]="api.direction === 'SOURCE_TO_TARGET'" [class.badge-medium]="api.direction === 'TARGET_TO_SOURCE'">
-              {{ api.direction === 'SOURCE_TO_TARGET' ? 'WRITE' : 'READ' }}
-            </span>
+            <div style="display: flex; gap: 6px;">
+              <span class="badge" [class.badge-high]="api.status === 'ACTIVE'" [class.badge-low]="api.status === 'UNMAPPED'">
+                {{ api.status === 'UNMAPPED' ? '⚠️ UNMAPPED ROUTE' : api.status }}
+              </span>
+              <span class="badge" [class.badge-high]="api.direction === 'SOURCE_TO_TARGET'" [class.badge-medium]="api.direction === 'TARGET_TO_SOURCE'">
+                {{ api.direction === 'SOURCE_TO_TARGET' ? 'WRITE' : 'READ' }}
+              </span>
+            </div>
           </div>
 
           <h3 style="font-size: 1.0625rem; margin-bottom: 8px;">{{ api.name }}</h3>
-          <p style="color: var(--text-secondary); font-size: 0.8125rem; margin-bottom: 16px;">
+          <p style="color: var(--text-secondary); font-size: 0.8125rem; margin-bottom: 14px;">
             {{ api.description || 'No description provided.' }}
           </p>
 
-          <div style="background: rgba(0,0,0,0.25); border-radius: 6px; padding: 10px 12px; margin-bottom: 16px; font-size: 0.75rem; color: var(--text-muted);">
-            <div>Target URL: <code>{{ api.targetUrl || 'Internal Gateway Proxy' }}</code></div>
-            <div style="margin-top: 4px;">
+          <!-- 3 URLs Box per API -->
+          <div style="background: rgba(0,0,0,0.32); border-radius: 6px; padding: 10px 12px; margin-bottom: 16px; font-size: 0.74rem; color: var(--text-muted); line-height: 1.65;">
+            <div>1️⃣ Caller (System A): <code style="color: #93c5fd;">{{ api.sourceUrl || (selectedProject?.sourceSystemUrl + api.endpointPath) }}</code></div>
+            <div style="margin-top: 3px; display: flex; justify-content: space-between; align-items: center; gap: 6px;">
+              <span>2️⃣ <strong style="color: #34d399;">Gateway URL (Call This):</strong> <code style="color: #34d399;">{{ api.gatewayUrl || (selectedProject?.gatewayUrl + api.endpointPath) }}</code></span>
+              <button class="btn btn-secondary btn-sm" style="padding: 1px 6px; font-size: 0.68rem;"
+                      (click)="copyText(api.gatewayUrl || (selectedProject?.gatewayUrl + api.endpointPath), 'Gateway URL')">Copy</button>
+            </div>
+            <div style="margin-top: 3px;">3️⃣ Target (System B): <code style="color: #c4b5fd;">{{ api.targetUrl || 'Internal Gateway Proxy' }}</code></div>
+            <div style="margin-top: 6px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 6px;">
               Source Schema: <span [style.color]="api.sourceSchema ? '#34d399' : '#f87171'">{{ api.sourceSchema ? 'Configured ✓' : 'Missing' }}</span> | 
-              Target Schema: <span [style.color]="api.targetSchema ? '#34d399' : '#f87171'">{{ api.targetSchema ? 'Configured ✓' : 'Missing' }}</span>
+              Target Schema: <span [style.color]="api.targetSchema ? '#34d399' : '#f87171'">{{ api.targetSchema ? 'Configured ✓' : 'Missing (Unmapped Demo)' }}</span>
             </div>
           </div>
         </div>
 
         <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-subtle); padding-top: 14px;">
           <div style="display: flex; gap: 8px;">
-            <button class="btn btn-secondary btn-sm" (click)="selectApi(api)">Point Details</button>
-            <button class="btn btn-primary btn-sm" (click)="openApiTest(api)">Test Transform</button>
+            <button class="btn btn-secondary btn-sm" (click)="selectApi(api)">Configure URLs</button>
+            <button class="btn btn-primary btn-sm" (click)="openApiTest(api)">▶ Test via Gateway</button>
           </div>
           <button class="btn btn-secondary btn-sm" style="color: #f87171;" (click)="deleteApi(api.id)" title="Delete API">✕</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: LIVE 3-URL GATEWAY SIMULATOR & EXECUTION/ERROR LOGS -->
+  <div *ngIf="activeTab === 'gateway'" class="animate-slide-up" data-aid="view-gateway">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+      <div>
+        <h2>🌐 3-URL Live Gateway Simulator &amp; Execution/Error Telemetry</h2>
+        <p style="color: var(--text-secondary); font-size: 0.875rem;">
+          Switch projects below or trigger any of the 6 enterprise cases to see how requests route across the 3 URLs in &lt;5ms.
+        </p>
+      </div>
+      <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <button class="btn btn-primary" (click)="runAllGatewayScenarios()" [disabled]="isSimulatingGateway"
+                style="background: linear-gradient(135deg, #059669, #10b981);" data-aid="btn-run-all-6-cases">
+          {{ isSimulatingGateway ? 'Executing All 6 Cases...' : '▶ Run All 6 Enterprise Cases Now' }}
+        </button>
+        <button class="btn btn-secondary" (click)="clearGatewayHistory()" [disabled]="gatewayLogs.length === 0">
+          Clear Logs
+        </button>
+      </div>
+    </div>
+
+    <!-- Project Selector Bar + How Gateway Selects the Correct Project -->
+    <div class="glass-card" style="padding: 14px 18px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; background: rgba(99, 102, 241, 0.08); border-color: rgba(99, 102, 241, 0.35);">
+      <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+        <span style="font-size: 0.8rem; font-weight: 700; color: #a5b4fc;">🎯 Select Active Integration Project:</span>
+        <button *ngFor="let p of projects" class="btn btn-sm"
+                [class.btn-primary]="selectedProject?.id === p.id"
+                [class.btn-secondary]="selectedProject?.id !== p.id"
+                (click)="selectProject(p)">
+          {{ p.name }}
+        </button>
+      </div>
+      <div style="font-size: 0.75rem; color: var(--text-secondary);">
+        <strong>How Gateway Targets This Project:</strong>
+        1) Explicit App Slug (<code>/api/gateway/SEtoCM3/...</code>) &nbsp;|&nbsp;
+        2) Auto-Discovery (<code>/api/gateway/auto/...</code> matches API Registry path &amp; payload fields)
+      </div>
+    </div>
+
+    <!-- 3-URL Interactive Routing Topology Card -->
+    <div class="glass-card" style="padding: 18px 22px; margin-bottom: 20px; border-color: rgba(52, 211, 153, 0.35); background: rgba(16, 185, 129, 0.05);">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 14px;">
+        <div style="font-size: 0.9375rem; font-weight: 700; color: #34d399;">
+          🔗 Live 3-URL Topology for {{ selectedProject?.name }} (Who Calls Whom?)
+        </div>
+        <div style="display: flex; gap: 14px; align-items: center; flex-wrap: wrap; font-size: 0.78rem;">
+          <div>
+            <span style="color: var(--text-muted); margin-right: 6px;">Unmapped Fields Policy:</span>
+            <select [(ngModel)]="gatewayUnmappedPolicy" style="width: 195px; padding: 4px 8px; font-size: 0.75rem;">
+              <option value="DROP_WITH_WARNING">DROP_WITH_WARNING (Default)</option>
+              <option value="PASS_THROUGH">PASS_THROUGH (Forward Raw)</option>
+              <option value="STRICT_REJECT">STRICT_REJECT (Block 422)</option>
+            </select>
+          </div>
+          <div>
+            <span style="color: var(--text-muted); margin-right: 6px;">If Mapping Missing:</span>
+            <select [(ngModel)]="gatewayMissingPolicy" style="width: 215px; padding: 4px 8px; font-size: 0.75rem;">
+              <option value="STRICT_REJECT_422">STRICT_REJECT_422 (Quarantine)</option>
+              <option value="PASS_THROUGH_WARNING">PASS_THROUGH_WARNING (202)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr auto 1.25fr auto 1fr; gap: 10px; align-items: center;">
+        <!-- URL 1 -->
+        <div style="background: rgba(0,0,0,0.38); padding: 12px 14px; border-radius: 8px; border: 1px solid rgba(96, 165, 250, 0.35);">
+          <div style="font-size: 0.7rem; color: #60a5fa; text-transform: uppercase; font-weight: 700;">URL #1 — Source System A (Caller)</div>
+          <div style="font-weight: 700; font-size: 0.875rem; margin: 3px 0;">{{ selectedProject?.sourceSystemName || 'Source System A' }}</div>
+          <code style="font-size: 0.74rem; color: #93c5fd; word-break: break-all;">{{ selectedProject?.sourceSystemUrl }}</code>
+        </div>
+
+        <div style="font-size: 1.25rem; color: #34d399; font-weight: bold;">&rarr;</div>
+
+        <!-- URL 2 (SchemaBridge Gateway) -->
+        <div style="background: rgba(16, 185, 129, 0.14); padding: 12px 14px; border-radius: 8px; border: 1.5px solid #34d399;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 0.7rem; color: #34d399; text-transform: uppercase; font-weight: 700;">URL #2 — SchemaBridge Gateway (CALL THIS URL)</span>
+            <button class="btn btn-secondary btn-sm" style="padding: 1px 8px; font-size: 0.68rem;"
+                    (click)="copyText((selectedProject?.gatewayUrl || '') + (selectedProject?.name?.toLowerCase()?.includes('setocm3') ? '/api/v1/subscriptions' : '/api/v1/orders'), 'Gateway Endpoint URL')">
+              📋 Copy URL
+            </button>
+          </div>
+          <div style="font-weight: 700; font-size: 0.875rem; margin: 3px 0; color: #fff;">Pure-Java Deterministic Proxy (&lt;5ms · Zero AI in Runtime)</div>
+          <code style="font-size: 0.76rem; color: #34d399; word-break: break-all; font-weight: 600;">
+            {{ selectedProject?.gatewayUrl }}{{ selectedProject?.name?.toLowerCase()?.includes('setocm3') ? '/api/v1/subscriptions' : '/api/v1/orders' }}
+          </code>
+        </div>
+
+        <div style="font-size: 1.25rem; color: #34d399; font-weight: bold;">&rarr;</div>
+
+        <!-- URL 3 -->
+        <div style="background: rgba(0,0,0,0.38); padding: 12px 14px; border-radius: 8px; border: 1px solid rgba(196, 181, 253, 0.35);">
+          <div style="font-size: 0.7rem; color: #c4b5fd; text-transform: uppercase; font-weight: 700;">URL #3 — Target System B (Destination)</div>
+          <div style="font-weight: 700; font-size: 0.875rem; margin: 3px 0;">{{ selectedProject?.targetSystemName || 'Target System B' }}</div>
+          <code style="font-size: 0.74rem; color: #c4b5fd; word-break: break-all;">{{ selectedProject?.targetSystemUrl }}</code>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6 Enterprise Scenario Cards (1-Click Triggers for Management Demo) -->
+    <div style="margin-bottom: 22px;">
+      <h4 style="margin: 0 0 10px 0; font-size: 0.875rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em;">
+        Click Any Scenario Below to Trigger a Live Call Through the 3-URL Gateway:
+      </h4>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(205px, 1fr)); gap: 12px;">
+        <div class="glass-card" style="padding: 14px; cursor: pointer; border-left: 3px solid #10b981;" (click)="runSingleGatewayCase(1)" data-aid="card-case-1">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <span class="badge badge-high">CASE 1 · WRITE</span>
+            <span style="font-size: 0.72rem; color: #34d399;">HTTP 201</span>
+          </div>
+          <div style="font-weight: 700; font-size: 0.84rem; margin-bottom: 4px;">Happy Path WRITE</div>
+          <div style="font-size: 0.73rem; color: var(--text-secondary);">System A &rarr; Gateway &rarr; System B (9 rules in &lt;3ms)</div>
+        </div>
+
+        <div class="glass-card" style="padding: 14px; cursor: pointer; border-left: 3px solid #3b82f6;" (click)="runSingleGatewayCase(2)" data-aid="card-case-2">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <span class="badge" style="background: rgba(59,130,246,0.2); color: #60a5fa;">CASE 2 · READ</span>
+            <span style="font-size: 0.72rem; color: #60a5fa;">HTTP 200</span>
+          </div>
+          <div style="font-weight: 700; font-size: 0.84rem; margin-bottom: 4px;">Happy Path Reverse READ</div>
+          <div style="font-size: 0.73rem; color: var(--text-secondary);">System B &rarr; Gateway Invert &rarr; System A legacy format</div>
+        </div>
+
+        <div class="glass-card" style="padding: 14px; cursor: pointer; border-left: 3px solid #f59e0b;" (click)="runSingleGatewayCase(3)" data-aid="card-case-3">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <span class="badge badge-medium">CASE 3 · UNMAPPED FIELDS</span>
+            <span style="font-size: 0.72rem; color: #fbbf24;">WARN</span>
+          </div>
+          <div style="font-weight: 700; font-size: 0.84rem; margin-bottom: 4px;">Extra Unmapped Fields</div>
+          <div style="font-size: 0.73rem; color: var(--text-secondary);">Payload has unknown fields; logs warning &amp; applies policy</div>
+        </div>
+
+        <div class="glass-card" style="padding: 14px; cursor: pointer; border-left: 3px solid #ef4444;" (click)="runSingleGatewayCase(4)" data-aid="card-case-4">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <span class="badge badge-low">CASE 4 · NO MAPPING</span>
+            <span style="font-size: 0.72rem; color: #f87171;">HTTP 422</span>
+          </div>
+          <div style="font-weight: 700; font-size: 0.84rem; margin-bottom: 4px;">Mapping Missing for Route</div>
+          <div style="font-size: 0.73rem; color: var(--text-secondary);">Calls unmapped API; quarantines &amp; captures fields in log</div>
+        </div>
+
+        <div class="glass-card" style="padding: 14px; cursor: pointer; border-left: 3px solid #ef4444;" (click)="runSingleGatewayCase(5)" data-aid="card-case-5">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <span class="badge badge-low">CASE 5 · TRANSFORM ERR</span>
+            <span style="font-size: 0.72rem; color: #f87171;">HTTP 400</span>
+          </div>
+          <div style="font-weight: 700; font-size: 0.84rem; margin-bottom: 4px;">Corrupted Date / Number</div>
+          <div style="font-size: 0.73rem; color: var(--text-secondary);">Fails DATE_FORMAT / NUMBER rule; blocks &amp; logs diagnostic</div>
+        </div>
+
+        <div class="glass-card" style="padding: 14px; cursor: pointer; border-left: 3px solid #ef4444;" (click)="runSingleGatewayCase(6)" data-aid="card-case-6">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <span class="badge badge-low">CASE 6 · SCHEMA ERR</span>
+            <span style="font-size: 0.72rem; color: #f87171;">HTTP 422</span>
+          </div>
+          <div style="font-weight: 700; font-size: 0.84rem; margin-bottom: 4px;">Validation Failure</div>
+          <div style="font-size: 0.73rem; color: var(--text-secondary);">Missing required ID &amp; bad email blocked by validator</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SELECTED EXECUTION TRACE INSPECTOR (3-Column Visual Inspector) -->
+    <div *ngIf="selectedGatewayLog" class="glass-card" style="padding: 20px; margin-bottom: 24px; border: 1px solid rgba(99, 102, 241, 0.4);" data-aid="gateway-trace-inspector">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 12px;">
+        <div>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span class="badge"
+                  [class.badge-high]="selectedGatewayLog.status === 'SUCCESS'"
+                  [class.badge-medium]="selectedGatewayLog.status.includes('WARNING') || selectedGatewayLog.status.includes('FALLBACK')"
+                  [class.badge-low]="selectedGatewayLog.status.includes('ERROR')">
+              HTTP {{ selectedGatewayLog.httpStatusCode }} &bull; {{ selectedGatewayLog.status }}
+            </span>
+            <strong style="font-size: 1rem;">{{ selectedGatewayLog.scenarioName }}</strong>
+          </div>
+          <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">
+            Correlation ID: <code>{{ selectedGatewayLog.correlationId }}</code> &bull;
+            Route: <code>{{ selectedGatewayLog.httpMethod }} {{ selectedGatewayLog.endpointPath }}</code> &bull;
+            Duration: <strong>{{ selectedGatewayLog.durationMs }}ms</strong> &bull;
+            Mapping Version: <strong>{{ selectedGatewayLog.mappingVersion ? 'v' + selectedGatewayLog.mappingVersion : 'NONE (Unmapped)' }}</strong>
+          </div>
+        </div>
+      </div>
+
+      <!-- Error or Warning Diagnostic Alert Box -->
+      <div *ngIf="selectedGatewayLog.errorMessage" style="margin-bottom: 16px; padding: 12px 16px; border-radius: 8px;"
+           [style.background]="selectedGatewayLog.status.includes('ERROR') ? 'rgba(239, 68, 68, 0.14)' : 'rgba(245, 158, 11, 0.14)'"
+           [style.border]="selectedGatewayLog.status.includes('ERROR') ? '1px solid rgba(239, 68, 68, 0.4)' : '1px solid rgba(245, 158, 11, 0.4)'">
+        <div style="font-weight: 700; font-size: 0.84rem;"
+             [style.color]="selectedGatewayLog.status.includes('ERROR') ? '#fca5a5' : '#fde68a'">
+          {{ selectedGatewayLog.status.includes('ERROR') ? '🚨 Gateway Error Logged & Target System Protected:' : '⚠️ Gateway Warning Logged:' }}
+        </div>
+        <div style="font-size: 0.8125rem; color: var(--text-primary); margin-top: 4px; font-family: monospace;">
+          {{ selectedGatewayLog.errorMessage }}
+        </div>
+        <div *ngIf="selectedGatewayLog.resolutionHint" style="font-size: 0.78rem; color: #93c5fd; margin-top: 6px;">
+          💡 <strong>Resolution / Action:</strong> {{ selectedGatewayLog.resolutionHint }}
+        </div>
+      </div>
+
+      <!-- 3-Column Trace Panels -->
+      <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); gap: 16px;">
+        <!-- Col 1: Incoming Payload from URL #1 -->
+        <div style="min-width: 0; background: rgba(0,0,0,0.3); border-radius: 8px; padding: 12px; border: 1px solid rgba(255,255,255,0.06);">
+          <div style="font-size: 0.75rem; font-weight: 700; color: #93c5fd; margin-bottom: 4px;">
+            1️⃣ Incoming Payload (From Caller URL #1)
+          </div>
+          <div style="font-size: 0.68rem; color: var(--text-muted); margin-bottom: 8px; word-break: break-all;">
+            <code>{{ selectedGatewayLog.sourceUrl }}</code>
+          </div>
+          <pre style="margin: 0; font-size: 0.75rem; color: #e2e8f0; max-height: 230px; overflow: auto; white-space: pre-wrap; word-break: break-word; font-family: monospace;">{{ selectedGatewayLog.requestPayload | json }}</pre>
+        </div>
+
+        <!-- Col 2: SchemaBridge Gateway Rules & Unmapped Telemetry (URL #2) -->
+        <div style="min-width: 0; background: rgba(0,0,0,0.3); border-radius: 8px; padding: 12px; border: 1px solid rgba(52, 211, 153, 0.25);">
+          <div style="font-size: 0.75rem; font-weight: 700; color: #34d399; margin-bottom: 4px;">
+            2️⃣ SchemaBridge Gateway Execution (URL #2)
+          </div>
+          <div style="font-size: 0.68rem; color: var(--text-muted); margin-bottom: 8px; word-break: break-all;">
+            <code>{{ selectedGatewayLog.gatewayUrl }}</code>
+          </div>
+
+          <div *ngIf="selectedGatewayLog.appliedRules && selectedGatewayLog.appliedRules.length > 0" style="margin-bottom: 10px;">
+            <div style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 4px;">
+              Applied Deterministic Rules ({{ selectedGatewayLog.appliedRules.length }}):
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 4px; max-height: 150px; overflow: auto;">
+              <div *ngFor="let r of selectedGatewayLog.appliedRules" style="font-size: 0.72rem; background: rgba(16, 185, 129, 0.12); color: #6ee7b7; padding: 3px 8px; border-radius: 4px; font-family: monospace; word-break: break-word;">
+                ✓ {{ r }}
+              </div>
+            </div>
+          </div>
+
+          <div *ngIf="selectedGatewayLog.unmappedFields && selectedGatewayLog.unmappedFields.length > 0">
+            <div style="font-size: 0.7rem; color: #fbbf24; margin-bottom: 4px;">
+              Unmapped Source Fields Detected ({{ selectedGatewayLog.unmappedFields.length }}):
+            </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+              <span *ngFor="let uf of selectedGatewayLog.unmappedFields" style="font-size: 0.72rem; background: rgba(245, 158, 11, 0.2); color: #fde68a; padding: 2px 8px; border-radius: 4px; font-family: monospace;">
+                ⚠️ {{ uf }}
+              </span>
+            </div>
+          </div>
+
+          <div *ngIf="(!selectedGatewayLog.appliedRules || selectedGatewayLog.appliedRules.length === 0) && (!selectedGatewayLog.unmappedFields || selectedGatewayLog.unmappedFields.length === 0)"
+               style="font-size: 0.75rem; color: #fca5a5; padding: 12px 0;">
+            Execution halted before rule completion due to error gate. Target System B was protected from invalid data.
+          </div>
+        </div>
+
+        <!-- Col 3: Transformed Output & Downstream Response (URL #3) -->
+        <div style="min-width: 0; background: rgba(0,0,0,0.3); border-radius: 8px; padding: 12px; border: 1px solid rgba(255,255,255,0.06);">
+          <div style="font-size: 0.75rem; font-weight: 700; color: #c4b5fd; margin-bottom: 4px;">
+            3️⃣ Transformed Output / Target URL #3 Response
+          </div>
+          <div style="font-size: 0.68rem; color: var(--text-muted); margin-bottom: 8px; word-break: break-all;">
+            <code>{{ selectedGatewayLog.targetUrl }}</code>
+          </div>
+          <pre style="margin: 0; font-size: 0.75rem; max-height: 230px; overflow: auto; white-space: pre-wrap; word-break: break-word; font-family: monospace;"
+               [style.color]="selectedGatewayLog.status.includes('ERROR') ? '#fca5a5' : '#34d399'">{{ (selectedGatewayLog.status.includes('ERROR') ? selectedGatewayLog.downstreamResponse : selectedGatewayLog.transformedPayload) | json }}</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- GATEWAY EXECUTION & ERROR LOGS TABLE -->
+    <div class="glass-card" style="padding: 20px;" data-aid="table-gateway-logs">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
+        <h3 style="font-size: 1rem; margin: 0;">Gateway Traffic, Unmapped Field Warnings &amp; Error Logs</h3>
+        <div class="filter-group">
+          <button class="filter-btn" [class.active]="gatewayLogFilter === 'ALL'" (click)="gatewayLogFilter = 'ALL'">
+            All ({{ gatewayLogs.length }})
+          </button>
+          <button class="filter-btn" [class.active]="gatewayLogFilter === 'SUCCESS'" (click)="gatewayLogFilter = 'SUCCESS'">
+            ✓ Success ({{ gatewaySuccessCount }})
+          </button>
+          <button class="filter-btn" [class.active]="gatewayLogFilter === 'WARNING'" (click)="gatewayLogFilter = 'WARNING'">
+            ⚠️ Unmapped Warnings ({{ gatewayWarningCount }})
+          </button>
+          <button class="filter-btn" [class.active]="gatewayLogFilter === 'ERROR'" (click)="gatewayLogFilter = 'ERROR'">
+            🚨 Errors ({{ gatewayErrorCount }})
+          </button>
+        </div>
+      </div>
+
+      <div style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.8rem;">
+          <thead>
+            <tr style="border-bottom: 1px solid var(--border-subtle); color: var(--text-muted);">
+              <th style="padding: 10px 12px;">Correlation ID</th>
+              <th style="padding: 10px 12px;">Scenario / Case</th>
+              <th style="padding: 10px 12px;">Direction &amp; Route</th>
+              <th style="padding: 10px 12px;">Status</th>
+              <th style="padding: 10px 12px;">Rules / Unmapped</th>
+              <th style="padding: 10px 12px;">Latency</th>
+              <th style="padding: 10px 12px;">Diagnostic / Summary</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let log of filteredGatewayLogs"
+                (click)="selectedGatewayLog = log"
+                style="border-bottom: 1px solid var(--border-subtle); cursor: pointer;"
+                [style.background]="selectedGatewayLog?.id === log.id ? 'rgba(59, 130, 246, 0.12)' : 'transparent'">
+              <td style="padding: 10px 12px; font-family: monospace; color: #93c5fd;">{{ log.correlationId }}</td>
+              <td style="padding: 10px 12px; font-weight: 600;">{{ log.scenarioName }}</td>
+              <td style="padding: 10px 12px; font-family: monospace;">
+                <span class="badge" style="margin-right: 6px; font-size: 0.65rem;">{{ log.httpMethod }}</span>{{ log.endpointPath }}
+              </td>
+              <td style="padding: 10px 12px;">
+                <span class="badge"
+                      [class.badge-high]="log.status === 'SUCCESS'"
+                      [class.badge-medium]="log.status.includes('WARNING') || log.status.includes('FALLBACK')"
+                      [class.badge-low]="log.status.includes('ERROR')">
+                  {{ log.httpStatusCode }} &bull; {{ log.status }}
+                </span>
+              </td>
+              <td style="padding: 10px 12px;">
+                <span style="color: #34d399;">{{ log.appliedRules.length }} rules</span>
+                <span *ngIf="log.unmappedFields && log.unmappedFields.length > 0" style="color: #fbbf24; margin-left: 6px;">
+                  ({{ log.unmappedFields.length }} unmapped)
+                </span>
+              </td>
+              <td style="padding: 10px 12px; font-weight: 600;">{{ log.durationMs }}ms</td>
+              <td style="padding: 10px 12px; color: var(--text-secondary); max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                {{ log.errorMessage || 'Delivered & validated against target schema.' }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
   </div>
@@ -449,10 +858,13 @@
       <input type="text" class="nl-input" [(ngModel)]="nlInstruction"
              placeholder="Natural Language AI Assistant: e.g. 'Set accountEnabled to true when active is Yes' or 'Combine firstName and lastName into displayName'"
              (keyup.enter)="convertNaturalLanguage()" data-aid="input-natural-language" />
-      <button class="btn btn-primary" (click)="convertNaturalLanguage()" [disabled]="isConvertingNl" data-aid="btn-convert-nl">
+      <button class="btn btn-primary" (click)="convertNaturalLanguage()" [disabled]="isConvertingNl || isSavingRules" data-aid="btn-convert-nl">
         {{ isConvertingNl ? 'Analyzing...' : 'Convert with Aviator AI' }}
       </button>
     </div>
+    <p *ngIf="ruleSaveError && !showEditRuleModal" class="validation-card invalid" role="alert" data-aid="rule-save-error">{{ ruleSaveError }}</p>
+    <p *ngIf="isSavingRules" role="status" data-aid="rule-save-status">Saving mapping changes...</p>
+    <p *ngIf="activeMapping?.status === 'PUBLISHED'" role="status">Published mapping versions are read-only.</p>
 
     <!-- Quick Actions Toolbar -->
     <div class="glass-card action-toolbar">
@@ -475,29 +887,29 @@
       </div>
 
       <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
-        <button class="btn btn-primary btn-sm" (click)="openCustomRuleModal()" data-aid="btn-open-custom-rule">
+        <button class="btn btn-primary btn-sm" (click)="openCustomRuleModal()" [disabled]="isSavingRules || isConvertingNl" data-aid="btn-open-custom-rule">
           + Add Custom Rule
         </button>
-        <button class="btn btn-secondary btn-sm" (click)="generateMappings()" data-aid="btn-generate-mappings">
+        <button class="btn btn-secondary btn-sm" (click)="generateMappings()" [disabled]="isSavingRules || isConvertingNl" data-aid="btn-generate-mappings">
           ⚡ 5-Level Match
         </button>
-        <button class="btn btn-secondary btn-sm" (click)="approveAllHighConfidence()" [disabled]="isApprovingHighConfidence"
+        <button class="btn btn-secondary btn-sm" (click)="approveAllHighConfidence()" [disabled]="isApprovingHighConfidence || isSavingRules || isConvertingNl || !activeMapping || activeMapping.status === 'PUBLISHED'"
                 title="1-Click Approve all high-confidence rules (&ge;90%)"
                 style="border-color: rgba(52, 211, 153, 0.4); color: #34d399;" data-aid="btn-approve-high-confidence">
           {{ isApprovingHighConfidence ? 'Approving...' : '✓ Approve High-Confidence (&ge;90%)' }}
         </button>
-        <button class="btn btn-secondary btn-sm" (click)="approveAllMappings()" [disabled]="isApprovingAll"
+        <button class="btn btn-secondary btn-sm" (click)="approveAllMappings()" [disabled]="isApprovingAll || isSavingRules || isConvertingNl || !activeMapping || activeMapping.status === 'PUBLISHED'"
                 title="Approve all rules in mapping" data-aid="btn-approve-all">
           {{ isApprovingAll ? 'Approving...' : '✓ Approve All' }}
         </button>
-        <button class="btn btn-secondary btn-sm" (click)="invertCurrentMapping()" [disabled]="isInvertingMapping"
+        <button class="btn btn-secondary btn-sm" (click)="invertCurrentMapping()" [disabled]="isInvertingMapping || isSavingRules || isConvertingNl"
                 title="Automatically create inverse bidirectional mapping reversing Target -> Source" data-aid="btn-invert-mapping">
           {{ isInvertingMapping ? 'Inverting...' : '⇄ Invert Mapping' }}
         </button>
-        <button class="btn btn-secondary btn-sm" (click)="cloneMapping()" data-aid="btn-clone-mapping">
+        <button class="btn btn-secondary btn-sm" (click)="cloneMapping()" [disabled]="isSavingRules || isConvertingNl || !activeMapping" data-aid="btn-clone-mapping">
           Clone
         </button>
-        <button class="btn btn-success btn-sm" (click)="publishMapping()" data-aid="btn-publish-mapping">
+        <button class="btn btn-success btn-sm" (click)="publishMapping()" [disabled]="isSavingRules || isConvertingNl || activeMapping?.status !== 'APPROVED'" data-aid="btn-publish-mapping">
           Publish v{{ activeMapping?.version }}
         </button>
       </div>
@@ -560,10 +972,10 @@
             </div>
 
             <div class="rule-actions">
-              <button class="btn btn-secondary btn-sm" (click)="openEditRule(rule, i)" [attr.data-aid]="'btn-edit-rule-' + i">
+              <button class="btn btn-secondary btn-sm" (click)="openEditRule(rule)" [disabled]="isSavingRules || isConvertingNl || activeMapping?.status === 'PUBLISHED' || !rule.id" [attr.data-aid]="'btn-edit-rule-' + i">
                 Edit
               </button>
-              <button class="btn btn-danger btn-sm" (click)="deleteRule(i)" [attr.data-aid]="'btn-delete-rule-' + i">
+              <button class="btn btn-danger btn-sm" (click)="deleteRule(rule)" [disabled]="isSavingRules || isConvertingNl || activeMapping?.status === 'PUBLISHED' || !rule.id" [attr.data-aid]="'btn-delete-rule-' + i">
                 Reject
               </button>
             </div>
@@ -727,17 +1139,27 @@
       </div>
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
         <div>
-          <label style="font-size: 0.75rem; color: var(--text-secondary);">Source System Name</label>
+          <label style="font-size: 0.75rem; color: var(--text-secondary);">1️⃣ Source System Name (System A)</label>
           <input type="text" [(ngModel)]="newProjectSourceSystem" data-aid="input-source-system" />
         </div>
         <div>
-          <label style="font-size: 0.75rem; color: var(--text-secondary);">Target System Name</label>
+          <label style="font-size: 0.75rem; color: var(--text-secondary);">3️⃣ Target System Name (System B)</label>
           <input type="text" [(ngModel)]="newProjectTargetSystem" data-aid="input-target-system" />
+        </div>
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div>
+          <label style="font-size: 0.75rem; color: var(--text-secondary);">1️⃣ Source System Base URL</label>
+          <input type="text" [(ngModel)]="newProjectSourceUrl" placeholder="http://localhost:8080/mock/system-a" data-aid="input-source-url" />
+        </div>
+        <div>
+          <label style="font-size: 0.75rem; color: var(--text-secondary);">3️⃣ Target System Base URL</label>
+          <input type="text" [(ngModel)]="newProjectTargetUrl" placeholder="http://localhost:8080/mock/system-b" data-aid="input-target-url" />
         </div>
       </div>
       <div>
         <label style="font-size: 0.75rem; color: var(--text-secondary);">Governance Approver Email</label>
-        <input type="email" [(ngModel)]="newProjectApproverEmail" placeholder="approver@enterprise.com" data-aid="input-approver-email" />
+        <input type="email" [(ngModel)]="newProjectApproverEmail" placeholder="baljinders@opentext.com" data-aid="input-approver-email" />
         <span style="font-size: 0.7rem; color: var(--text-muted); display: block; margin-top: 2px;">
           Alerted via email when mappings require manual review or approval.
         </span>
@@ -761,27 +1183,28 @@
 
 <!-- MODAL: EDIT RULE -->
 <div *ngIf="showEditRuleModal && editingRule" class="modal-backdrop" data-aid="modal-edit-rule">
-  <div class="modal-content animate-slide-up">
-    <h3 style="margin-bottom: 16px;">Edit Mapping Rule</h3>
+  <div class="modal-content animate-slide-up" role="dialog" aria-modal="true" aria-labelledby="edit-rule-title" [attr.aria-busy]="isSavingRules">
+    <h3 id="edit-rule-title" style="margin-bottom: 16px;">Edit Mapping Rule</h3>
     <div style="display: flex; flex-direction: column; gap: 14px;">
       <div>
-        <label style="font-size: 0.75rem; color: var(--text-secondary);">Target Path</label>
-        <input type="text" [(ngModel)]="editingRule.targetPath" data-aid="input-edit-target-path" />
+        <label for="edit-rule-target" style="font-size: 0.75rem; color: var(--text-secondary);">Target Path</label>
+        <input id="edit-rule-target" type="text" [(ngModel)]="editingRule.targetPath" [disabled]="isSavingRules" data-aid="input-edit-target-path" />
       </div>
       <div>
-        <label style="font-size: 0.75rem; color: var(--text-secondary);">Transformation Operation</label>
-        <select [(ngModel)]="editingRule.operation" data-aid="select-edit-operation">
+        <label for="edit-rule-operation" style="font-size: 0.75rem; color: var(--text-secondary);">Transformation Operation</label>
+        <select id="edit-rule-operation" [(ngModel)]="editingRule.operation" [disabled]="isSavingRules" data-aid="select-edit-operation">
           <option *ngFor="let op of supportedOperations" [value]="op">{{ op }}</option>
         </select>
       </div>
       <div>
-        <label style="font-size: 0.75rem; color: var(--text-secondary);">Explanation / Rationale</label>
-        <textarea rows="2" [(ngModel)]="editingRule.explanation" data-aid="input-edit-explanation"></textarea>
+        <label for="edit-rule-explanation" style="font-size: 0.75rem; color: var(--text-secondary);">Explanation / Rationale</label>
+        <textarea id="edit-rule-explanation" rows="2" [(ngModel)]="editingRule.explanation" [disabled]="isSavingRules" data-aid="input-edit-explanation"></textarea>
       </div>
     </div>
+    <p *ngIf="ruleSaveError" class="validation-card invalid" role="alert" data-aid="rule-edit-error">{{ ruleSaveError }}</p>
     <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
-      <button class="btn btn-secondary" (click)="showEditRuleModal = false" data-aid="btn-cancel-edit-rule">Cancel</button>
-      <button class="btn btn-primary" (click)="saveEditedRule()" data-aid="btn-save-edit-rule">Save Rule</button>
+      <button class="btn btn-secondary" (click)="showEditRuleModal = false" [disabled]="isSavingRules" data-aid="btn-cancel-edit-rule">Cancel</button>
+      <button class="btn btn-primary" (click)="saveEditedRule()" [disabled]="isSavingRules || !editingRule.targetPath.trim()" data-aid="btn-save-edit-rule">{{ isSavingRules ? 'Saving...' : 'Save Rule' }}</button>
     </div>
   </div>
 </div>
@@ -923,12 +1346,14 @@
 
 <!-- MODAL: TEST API TRANSFORMATION -->
 <div *ngIf="showApiTestModal && selectedApi" class="modal-backdrop" data-aid="modal-api-test">
-  <div class="modal-content animate-slide-up" style="max-width: 760px;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+  <div class="modal-content animate-slide-up" style="max-width: 980px; width: 92vw;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
       <div>
         <h3 style="margin: 0;">Test Endpoint: {{ selectedApi.name }}</h3>
         <p style="font-size: 0.8125rem; color: var(--text-muted); margin-top: 4px;">
-          <code>{{ selectedApi.httpMethod }} {{ selectedApi.endpointPath }}</code> &bull; {{ selectedApi.direction === 'SOURCE_TO_TARGET' ? 'WRITE Flow' : 'READ Flow' }}
+          <code>{{ selectedApi.httpMethod }} {{ selectedApi.endpointPath }}</code> &bull;
+          {{ selectedApi.direction === 'SOURCE_TO_TARGET' ? 'WRITE Flow' : 'READ Flow' }} &bull;
+          Gateway URL: <code style="color: #34d399;">{{ selectedApi.gatewayUrl }}</code>
         </p>
       </div>
       <button class="btn btn-primary btn-sm" (click)="executeApiTest()" [disabled]="isTestingApi">
@@ -936,26 +1361,31 @@
       </button>
     </div>
 
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-      <div>
+    <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: stretch;">
+      <div style="min-width: 0; display: flex; flex-direction: column;">
         <label style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 6px; display: block;">
-          Input Payload (Sent by caller)
+          1️⃣ Input Payload (Sent by Caller to Gateway URL)
         </label>
-        <textarea rows="12" class="code-editor" [(ngModel)]="apiTestPayload" style="width: 100%;"></textarea>
+        <textarea class="code-editor" [(ngModel)]="apiTestPayload"
+                  style="width: 100%; height: 320px; box-sizing: border-box; resize: vertical; font-family: monospace; font-size: 0.8125rem;"></textarea>
       </div>
 
-      <div>
+      <div style="min-width: 0; display: flex; flex-direction: column;">
         <label style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 6px; display: block;">
-          Deterministic Output (Sent to destination)
+          2️⃣ Deterministic Gateway Output &amp; Downstream Telemetry
         </label>
-        <div *ngIf="!apiTestResult" style="height: 250px; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.3); border-radius: 6px; color: var(--text-muted); font-size: 0.8125rem;">
-          Click "Run Transform" to test execution
+        <div *ngIf="!apiTestResult" style="height: 320px; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.3); border-radius: 6px; color: var(--text-muted); font-size: 0.8125rem; border: 1px solid rgba(255,255,255,0.08);">
+          Click "▶ Run Transform" to test execution
         </div>
-        <pre *ngIf="apiTestResult" class="code-editor" style="height: 250px; overflow: auto; background: rgba(0,0,0,0.4); border-radius: 6px; padding: 12px; margin: 0; font-size: 0.8125rem; color: #34d399;">{{ apiTestResult | json }}</pre>
+        <pre *ngIf="apiTestResult" class="code-editor"
+             style="width: 100%; height: 320px; box-sizing: border-box; overflow: auto; white-space: pre-wrap; word-break: break-word; background: rgba(0,0,0,0.4); border-radius: 6px; padding: 12px; margin: 0; font-size: 0.78rem; color: #34d399; font-family: monospace;">{{ apiTestResult | json }}</pre>
       </div>
     </div>
 
-    <div style="display: flex; justify-content: flex-end; margin-top: 18px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 18px;">
+      <span style="font-size: 0.75rem; color: var(--text-muted);">
+        Every test run is also logged in the <strong>🌐 Live Gateway &amp; Logs</strong> tab.
+      </span>
       <button class="btn btn-secondary" (click)="showApiTestModal = false">Close</button>
     </div>
   </div>

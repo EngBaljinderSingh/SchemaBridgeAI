@@ -40,11 +40,35 @@ public class IntegrationProject {
 
     @Column(name = "approver_email", length = 150)
     @Builder.Default
-    private String approverEmail = "approver@enterprise.com";
+    private String approverEmail = "baljinders@opentext.com";
 
     @Column(name = "auto_approve_enabled", nullable = false)
     @Builder.Default
     private boolean autoApproveEnabled = true;
+
+    @Column(name = "source_system_name", length = 255)
+    @Builder.Default
+    private String sourceSystemName = "Source System A";
+
+    @Column(name = "source_system_url", length = 500)
+    @Builder.Default
+    private String sourceSystemUrl = "http://localhost:8080/mock/system-a";
+
+    @Column(name = "target_system_name", length = 255)
+    @Builder.Default
+    private String targetSystemName = "Target System B";
+
+    @Column(name = "target_system_url", length = 500)
+    @Builder.Default
+    private String targetSystemUrl = "http://localhost:8080/mock/system-b";
+
+    @Column(name = "unmapped_field_policy", length = 50)
+    @Builder.Default
+    private String unmappedFieldPolicy = "DROP_WITH_WARNING";
+
+    @Column(name = "missing_mapping_policy", length = 50)
+    @Builder.Default
+    private String missingMappingPolicy = "STRICT_REJECT_422";
 
     @Column(name = "created_at", nullable = false, updatable = false)
     @Builder.Default

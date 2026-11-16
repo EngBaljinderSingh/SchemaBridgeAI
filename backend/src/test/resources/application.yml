@@ -15,6 +15,8 @@ spring:
 schemabridge:
   version: "1.0.0"
   service-code: "SB-AI-CORE"
+  demo:
+    auto-seed: false
   aviator:
     base-url: http://localhost:3000
     mock-fallback-enabled: true

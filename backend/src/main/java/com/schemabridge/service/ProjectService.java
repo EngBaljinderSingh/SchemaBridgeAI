@@ -53,7 +53,20 @@ public class ProjectService {
     public ProjectResponse createProject(ProjectCreateRequest req) {
         String approver = (req.getApproverEmail() != null && !req.getApproverEmail().isBlank())
                 ? req.getApproverEmail().trim()
-                : "approver@enterprise.com";
+                : "baljinders@opentext.com";
+
+        String srcName = (req.getSourceSystemName() != null && !req.getSourceSystemName().isBlank())
+                ? req.getSourceSystemName().trim() : "Source System A";
+        String srcUrl = (req.getSourceSystemUrl() != null && !req.getSourceSystemUrl().isBlank())
+                ? req.getSourceSystemUrl().trim() : "http://localhost:8080/mock/system-a";
+        String tgtName = (req.getTargetSystemName() != null && !req.getTargetSystemName().isBlank())
+                ? req.getTargetSystemName().trim() : "Target System B";
+        String tgtUrl = (req.getTargetSystemUrl() != null && !req.getTargetSystemUrl().isBlank())
+                ? req.getTargetSystemUrl().trim() : "http://localhost:8080/mock/system-b";
+        String unmappedPolicy = (req.getUnmappedFieldPolicy() != null && !req.getUnmappedFieldPolicy().isBlank())
+                ? req.getUnmappedFieldPolicy().trim() : "DROP_WITH_WARNING";
+        String missingPolicy = (req.getMissingMappingPolicy() != null && !req.getMissingMappingPolicy().isBlank())
+                ? req.getMissingMappingPolicy().trim() : "STRICT_REJECT_422";
 
         IntegrationProject project = IntegrationProject.builder()
                 .name(req.getName())
@@ -61,26 +74,32 @@ public class ProjectService {
                 .status(ProjectStatus.ACTIVE)
                 .approverEmail(approver)
                 .autoApproveEnabled(req.isAutoApproveEnabled())
+                .sourceSystemName(srcName)
+                .sourceSystemUrl(srcUrl)
+                .targetSystemName(tgtName)
+                .targetSystemUrl(tgtUrl)
+                .unmappedFieldPolicy(unmappedPolicy)
+                .missingMappingPolicy(missingPolicy)
                 .build();
         project = projectRepository.save(project);
 
         // Auto-create source and target systems if names supplied
-        String srcName = req.getSourceSystemName() != null ? req.getSourceSystemName() : "Source System";
         SystemDefinition srcSystem = SystemDefinition.builder()
                 .project(project)
                 .systemName(srcName)
                 .systemType(SystemType.REST_API)
                 .direction(Direction.SOURCE_TO_TARGET)
+                .baseUrl(srcUrl)
                 .schemaType(SchemaType.JSON_SCHEMA)
                 .build();
         systemRepository.save(srcSystem);
 
-        String tgtName = req.getTargetSystemName() != null ? req.getTargetSystemName() : "Target System";
         SystemDefinition tgtSystem = SystemDefinition.builder()
                 .project(project)
                 .systemName(tgtName)
                 .systemType(SystemType.REST_API)
                 .direction(Direction.TARGET_TO_SOURCE)
+                .baseUrl(tgtUrl)
                 .schemaType(SchemaType.JSON_SCHEMA)
                 .build();
         systemRepository.save(tgtSystem);
@@ -108,8 +127,15 @@ public class ProjectService {
         IntegrationProject project = projectRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Project", id));
         String oldName = project.getName();
-        project.setName(req.getName());
-        project.setDescription(req.getDescription());
+        if (req.getName() != null && !req.getName().isBlank()) project.setName(req.getName());
+        if (req.getDescription() != null) project.setDescription(req.getDescription());
+        if (req.getSourceSystemName() != null && !req.getSourceSystemName().isBlank()) project.setSourceSystemName(req.getSourceSystemName().trim());
+        if (req.getSourceSystemUrl() != null && !req.getSourceSystemUrl().isBlank()) project.setSourceSystemUrl(req.getSourceSystemUrl().trim());
+        if (req.getTargetSystemName() != null && !req.getTargetSystemName().isBlank()) project.setTargetSystemName(req.getTargetSystemName().trim());
+        if (req.getTargetSystemUrl() != null && !req.getTargetSystemUrl().isBlank()) project.setTargetSystemUrl(req.getTargetSystemUrl().trim());
+        if (req.getUnmappedFieldPolicy() != null && !req.getUnmappedFieldPolicy().isBlank()) project.setUnmappedFieldPolicy(req.getUnmappedFieldPolicy().trim());
+        if (req.getMissingMappingPolicy() != null && !req.getMissingMappingPolicy().isBlank()) project.setMissingMappingPolicy(req.getMissingMappingPolicy().trim());
+        if (req.getApproverEmail() != null && !req.getApproverEmail().isBlank()) project.setApproverEmail(req.getApproverEmail().trim());
         project = projectRepository.save(project);
 
         auditService.recordEvent("IntegrationProject", id, "UPDATE", "system", oldName, req.getName());
@@ -267,6 +293,23 @@ public class ProjectService {
                 .max(Integer::compareTo)
                 .orElse(null);
 
+        String srcName = p.getSourceSystemName() != null ? p.getSourceSystemName() : "Source System A";
+        String srcUrl = p.getSourceSystemUrl() != null ? p.getSourceSystemUrl() : "http://localhost:8080/mock/system-a";
+        String tgtName = p.getTargetSystemName() != null ? p.getTargetSystemName() : "Target System B";
+        String tgtUrl = p.getTargetSystemUrl() != null ? p.getTargetSystemUrl() : "http://localhost:8080/mock/system-b";
+
+        for (SystemDefinition s : systems) {
+            if (s.getDirection() == Direction.SOURCE_TO_TARGET) {
+                if (s.getSystemName() != null) srcName = s.getSystemName();
+                if (s.getBaseUrl() != null && !s.getBaseUrl().isBlank()) srcUrl = s.getBaseUrl();
+            } else if (s.getDirection() == Direction.TARGET_TO_SOURCE) {
+                if (s.getSystemName() != null) tgtName = s.getSystemName();
+                if (s.getBaseUrl() != null && !s.getBaseUrl().isBlank()) tgtUrl = s.getBaseUrl();
+            }
+        }
+
+        String routeSlug = toRouteSlug(p.getName(), p.getId());
+
         return ProjectResponse.builder()
                 .id(p.getId())
                 .name(p.getName())
@@ -275,12 +318,26 @@ public class ProjectService {
                 .createdBy(p.getCreatedBy())
                 .createdAt(p.getCreatedAt())
                 .updatedAt(p.getUpdatedAt())
-                .approverEmail(p.getApproverEmail())
+                .approverEmail(p.getApproverEmail() != null && !p.getApproverEmail().isBlank() ? p.getApproverEmail() : "baljinders@opentext.com")
                 .autoApproveEnabled(p.isAutoApproveEnabled())
+                .sourceSystemName(srcName)
+                .sourceSystemUrl(srcUrl)
+                .gatewayUrl("http://localhost:8080/api/gateway/" + routeSlug)
+                .targetSystemName(tgtName)
+                .targetSystemUrl(tgtUrl)
+                .unmappedFieldPolicy(p.getUnmappedFieldPolicy() != null ? p.getUnmappedFieldPolicy() : "DROP_WITH_WARNING")
+                .missingMappingPolicy(p.getMissingMappingPolicy() != null ? p.getMissingMappingPolicy() : "STRICT_REJECT_422")
                 .systemCount(systems.size())
                 .mappingVersionCount(mappings.size())
                 .latestPublishedVersion(latestPublished)
                 .build();
+    }
+
+    public static String toRouteSlug(String projectName, String fallbackId) {
+        if (projectName == null || projectName.isBlank()) return fallbackId;
+        String base = projectName.split("\\(")[0].trim();
+        String slug = base.replaceAll("[^A-Za-z0-9_-]", "");
+        return slug.isBlank() ? fallbackId : slug;
     }
 
     private SchemaResponse mapToSchemaResponse(SchemaDefinition sd, SystemDefinition sys, List<FieldExtractionDto> fields) {

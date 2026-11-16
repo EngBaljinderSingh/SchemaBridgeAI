@@ -28,6 +28,7 @@ public class RegisteredApiService {
     private final SchemaExtractionService extractionService;
     private final MatchingPipeline matchingPipeline;
     private final TransformationEngine transformationEngine;
+    private final GatewayProxyService gatewayProxyService;
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
 
@@ -37,6 +38,7 @@ public class RegisteredApiService {
             SchemaExtractionService extractionService,
             MatchingPipeline matchingPipeline,
             TransformationEngine transformationEngine,
+            GatewayProxyService gatewayProxyService,
             AuditService auditService,
             ObjectMapper objectMapper) {
         this.apiRepository = apiRepository;
@@ -44,6 +46,7 @@ public class RegisteredApiService {
         this.extractionService = extractionService;
         this.matchingPipeline = matchingPipeline;
         this.transformationEngine = transformationEngine;
+        this.gatewayProxyService = gatewayProxyService;
         this.auditService = auditService;
         this.objectMapper = objectMapper;
     }
@@ -71,6 +74,13 @@ public class RegisteredApiService {
             path = "/" + path;
         }
 
+        String defaultSrcBase = project.getSourceSystemUrl() != null ? project.getSourceSystemUrl() : "http://localhost:8080/mock/system-a";
+        String defaultTgtBase = project.getTargetSystemUrl() != null ? project.getTargetSystemUrl() : "http://localhost:8080/mock/system-b";
+        String srcUrl = (req.getSourceUrl() != null && !req.getSourceUrl().isBlank())
+                ? req.getSourceUrl().trim() : (defaultSrcBase + path);
+        String tgtUrl = (req.getTargetUrl() != null && !req.getTargetUrl().isBlank())
+                ? req.getTargetUrl().trim() : (defaultTgtBase + path);
+
         RegisteredApi api = RegisteredApi.builder()
                 .project(project)
                 .name(req.getName().trim())
@@ -78,7 +88,8 @@ public class RegisteredApiService {
                 .httpMethod(method)
                 .endpointPath(path)
                 .direction(req.getDirection() != null ? req.getDirection() : Direction.SOURCE_TO_TARGET)
-                .targetUrl(req.getTargetUrl())
+                .sourceUrl(srcUrl)
+                .targetUrl(tgtUrl)
                 .sourceSchema(req.getSourceSchema())
                 .targetSchema(req.getTargetSchema())
                 .status("ACTIVE")
@@ -104,6 +115,7 @@ public class RegisteredApiService {
             api.setEndpointPath(p.startsWith("/") ? p : "/" + p);
         }
         if (req.getDirection() != null) api.setDirection(req.getDirection());
+        if (req.getSourceUrl() != null) api.setSourceUrl(req.getSourceUrl());
         if (req.getTargetUrl() != null) api.setTargetUrl(req.getTargetUrl());
         if (req.getSourceSchema() != null) api.setSourceSchema(req.getSourceSchema());
         if (req.getTargetSchema() != null) api.setTargetSchema(req.getTargetSchema());
@@ -147,32 +159,73 @@ public class RegisteredApiService {
     }
 
     /**
-     * Executes deterministic transformation for a payload against this registered API.
+     * Executes deterministic transformation for a payload against this registered API and logs to the 3-URL Gateway.
      */
+    @SuppressWarnings("unchecked")
     public Map<String, Object> executeTransformForApi(String projectId, String apiId, Object inputPayload) {
-        List<MappingRuleDto> rules = generateMappingsForApi(projectId, apiId);
-        TransformationEngine.ExecutionResult execResult = transformationEngine.executeWithRuleDtos(inputPayload, rules);
+        RegisteredApi api = apiRepository.findByProjectIdAndId(projectId, apiId)
+                .orElseThrow(() -> new ResourceNotFoundException("RegisteredApi", apiId));
+
+        Map<String, Object> payloadMap = inputPayload instanceof Map<?, ?> m
+                ? (Map<String, Object>) m
+                : Map.of();
+
+        GatewayExecutionLogDto logDto = gatewayProxyService.invokeGateway(projectId, GatewayInvokeRequest.builder()
+                .apiId(api.getId())
+                .scenarioName("API Test: " + api.getName())
+                .httpMethod(api.getHttpMethod())
+                .endpointPath(api.getEndpointPath())
+                .direction(api.getDirection())
+                .payload(payloadMap)
+                .build());
 
         Map<String, Object> resp = new LinkedHashMap<>();
         resp.put("apiId", apiId);
         resp.put("projectId", projectId);
-        resp.put("transformedPayload", execResult.transformedPayload());
-        resp.put("appliedRules", execResult.appliedRules());
-        resp.put("durationMs", execResult.durationMs());
-        resp.put("status", "SUCCESS");
+        resp.put("correlationId", logDto.getCorrelationId());
+        resp.put("sourceUrl", logDto.getSourceUrl());
+        resp.put("gatewayUrl", logDto.getGatewayUrl());
+        resp.put("targetUrl", logDto.getTargetUrl());
+        resp.put("httpStatusCode", logDto.getHttpStatusCode());
+        resp.put("status", logDto.getStatus());
+        resp.put("durationMs", logDto.getDurationMs());
+        resp.put("transformedPayload", logDto.getTransformedPayload());
+        resp.put("appliedRules", logDto.getAppliedRules());
+        resp.put("unmappedFields", logDto.getUnmappedFields());
+        resp.put("downstreamResponse", logDto.getDownstreamResponse());
+        if (logDto.getErrorMessage() != null) {
+            resp.put("errorMessage", logDto.getErrorMessage());
+            resp.put("resolutionHint", logDto.getResolutionHint());
+        }
         return resp;
     }
 
     private RegisteredApiDto toDto(RegisteredApi a) {
+        String projId = a.getProject().getId();
+        String ep = a.getEndpointPath() != null && a.getEndpointPath().startsWith("/")
+                ? a.getEndpointPath() : "/" + (a.getEndpointPath() != null ? a.getEndpointPath() : "");
+        String defaultSrcBase = a.getProject().getSourceSystemUrl() != null
+                ? a.getProject().getSourceSystemUrl() : "http://localhost:8080/mock/system-a";
+        String defaultTgtBase = a.getProject().getTargetSystemUrl() != null
+                ? a.getProject().getTargetSystemUrl() : "http://localhost:8080/mock/system-b";
+        String resolvedSourceUrl = (a.getSourceUrl() != null && !a.getSourceUrl().isBlank())
+                ? a.getSourceUrl() : (defaultSrcBase + ep);
+        String resolvedTargetUrl = (a.getTargetUrl() != null && !a.getTargetUrl().isBlank())
+                ? a.getTargetUrl() : (defaultTgtBase + ep);
+        String routeSlug = ProjectService.toRouteSlug(a.getProject().getName(), projId);
+        String gatewayUrl = "http://localhost:8080/api/gateway/" + routeSlug + ep;
+
         return RegisteredApiDto.builder()
                 .id(a.getId())
-                .projectId(a.getProject().getId())
+                .projectId(projId)
                 .name(a.getName())
                 .description(a.getDescription())
                 .httpMethod(a.getHttpMethod())
                 .endpointPath(a.getEndpointPath())
                 .direction(a.getDirection())
-                .targetUrl(a.getTargetUrl())
+                .sourceUrl(resolvedSourceUrl)
+                .gatewayUrl(gatewayUrl)
+                .targetUrl(resolvedTargetUrl)
                 .sourceSchema(a.getSourceSchema())
                 .targetSchema(a.getTargetSchema())
                 .status(a.getStatus())

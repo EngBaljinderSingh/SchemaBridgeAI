@@ -11,7 +11,8 @@ import {
   TransformationPreviewResponse,
   AuditEvent,
   AviatorHealth,
-  RegisteredApi
+  RegisteredApi,
+  GatewayExecutionLog
 } from './models/schema-bridge.models';
 import { HOST_SYSTEM_A_SWAGGER, DESTINATION_SYSTEM_B_SWAGGER } from './samples/sample-swaggers';
 
@@ -23,7 +24,7 @@ import { HOST_SYSTEM_A_SWAGGER, DESTINATION_SYSTEM_B_SWAGGER } from './samples/s
   styleUrl: './app.css'
 })
 export class App implements OnInit {
-  activeTab: 'projects' | 'apis' | 'setup' | 'mapping' | 'preview' | 'versions' | 'audit' = 'projects';
+  activeTab: 'projects' | 'apis' | 'gateway' | 'setup' | 'mapping' | 'preview' | 'versions' | 'audit' = 'projects';
   projects: Project[] = [];
   selectedProject: Project | null = null;
   schemas: SchemaResponse[] = [];
@@ -33,6 +34,16 @@ export class App implements OnInit {
   versions: MappingDefinition[] = [];
   auditEvents: AuditEvent[] = [];
   aviatorHealth: AviatorHealth | null = null;
+
+  // 3-URL Live Gateway & Traffic/Error Logs State
+  gatewayLogs: GatewayExecutionLog[] = [];
+  selectedGatewayLog: GatewayExecutionLog | null = null;
+  gatewayLogFilter: 'ALL' | 'SUCCESS' | 'WARNING' | 'ERROR' = 'ALL';
+  isSimulatingGateway: boolean = false;
+  isSeedingDemoProjects: boolean = false;
+  copiedUrlBanner: string = '';
+  gatewayUnmappedPolicy: string = 'DROP_WITH_WARNING';
+  gatewayMissingPolicy: string = 'STRICT_REJECT_422';
 
   // Multi-API Registry State
   registeredApis: RegisteredApi[] = [];
@@ -46,6 +57,7 @@ export class App implements OnInit {
   newApiMethod: string = 'POST';
   newApiPath: string = '/api/v1/';
   newApiDirection: 'SOURCE_TO_TARGET' | 'TARGET_TO_SOURCE' = 'SOURCE_TO_TARGET';
+  newApiSourceUrl: string = '';
   newApiTargetUrl: string = '';
   newApiSourceSchema: string = '';
   newApiTargetSchema: string = '';
@@ -86,8 +98,12 @@ export class App implements OnInit {
   newProjectName: string = '';
   newProjectDescription: string = '';
   newProjectSourceSystem: string = 'Source System A';
+  newProjectSourceUrl: string = 'http://localhost:8080/mock/system-a';
   newProjectTargetSystem: string = 'Target System B';
-  newProjectApproverEmail: string = 'approver@enterprise.com';
+  newProjectTargetUrl: string = 'http://localhost:8080/mock/system-b';
+  newProjectUnmappedPolicy: string = 'DROP_WITH_WARNING';
+  newProjectMissingPolicy: string = 'STRICT_REJECT_422';
+  newProjectApproverEmail: string = 'baljinders@opentext.com';
   newProjectAutoApprove: boolean = true;
 
   // Asymmetric Schemas / Live Payload Tracing (NO Swagger support)
@@ -115,7 +131,9 @@ export class App implements OnInit {
 
   showEditRuleModal: boolean = false;
   editingRule: MappingRule | null = null;
-  editingRuleIndex: number = -1;
+  editingRuleId: string | null = null;
+  isSavingRules: boolean = false;
+  ruleSaveError: string = '';
 
   // Custom Mapping Rule State
   showCustomRuleModal: boolean = false;
@@ -137,7 +155,7 @@ export class App implements OnInit {
     'ARRAY_MAP', 'CONDITIONAL', 'REMOVE', 'TRIM', 'UPPERCASE', 'LOWERCASE'
   ];
 
-  constructor(private api: ApiService, private cdr: ChangeDetectorRef) {}
+  constructor(private api: ApiService, private cdr: ChangeDetectorRef) { }
 
   ngOnInit(): void {
     this.loadProjects();
@@ -162,11 +180,17 @@ export class App implements OnInit {
 
   selectProject(project: Project): void {
     this.selectedProject = project;
+    this.gatewayUnmappedPolicy = project.unmappedFieldPolicy || 'DROP_WITH_WARNING';
+    this.gatewayMissingPolicy = project.missingMappingPolicy || 'STRICT_REJECT_422';
     this.loadProjectData(project.id);
     this.cdr.detectChanges();
   }
 
   loadProjectData(projectId: string): void {
+    this.showEditRuleModal = false;
+    this.editingRule = null;
+    this.editingRuleId = null;
+    this.ruleSaveError = '';
     // Reset schema inputs and fields so stale project data or OIDs never linger
     this.sourceSchemaInput = '';
     this.targetSchemaInput = '';
@@ -226,6 +250,268 @@ export class App implements OnInit {
     });
 
     this.loadApis(projectId);
+    this.loadGatewayLogs(projectId);
+  }
+
+  loadGatewayLogs(projectId: string): void {
+    this.api.getGatewayLogs(projectId).subscribe({
+      next: (logs) => {
+        this.gatewayLogs = logs || [];
+        if (this.gatewayLogs.length > 0 && (!this.selectedGatewayLog || this.selectedGatewayLog.projectId !== projectId)) {
+          this.selectedGatewayLog = this.gatewayLogs[0];
+        } else if (this.gatewayLogs.length === 0) {
+          this.selectedGatewayLog = null;
+        }
+        this.cdr.detectChanges();
+      },
+      error: () => {
+        this.gatewayLogs = [];
+        this.selectedGatewayLog = null;
+        this.cdr.detectChanges();
+      }
+    });
+  }
+
+  get filteredGatewayLogs(): GatewayExecutionLog[] {
+    if (this.gatewayLogFilter === 'ALL') return this.gatewayLogs;
+    if (this.gatewayLogFilter === 'SUCCESS') {
+      return this.gatewayLogs.filter(l => l.status === 'SUCCESS');
+    }
+    if (this.gatewayLogFilter === 'WARNING') {
+      return this.gatewayLogs.filter(l => l.status.includes('WARNING') || l.status.includes('FALLBACK'));
+    }
+    return this.gatewayLogs.filter(l => l.status.includes('ERROR'));
+  }
+
+  get gatewaySuccessCount(): number {
+    return this.gatewayLogs.filter(l => l.status === 'SUCCESS').length;
+  }
+
+  get gatewayWarningCount(): number {
+    return this.gatewayLogs.filter(l => l.status.includes('WARNING') || l.status.includes('FALLBACK')).length;
+  }
+
+  get gatewayErrorCount(): number {
+    return this.gatewayLogs.filter(l => l.status.includes('ERROR')).length;
+  }
+
+  runAllGatewayScenarios(): void {
+    if (!this.selectedProject || this.isSimulatingGateway) return;
+    this.isSimulatingGateway = true;
+    this.cdr.detectChanges();
+    this.api.simulateAllGatewayCases(this.selectedProject.id).subscribe({
+      next: (newLogs) => {
+        this.isSimulatingGateway = false;
+        this.loadGatewayLogs(this.selectedProject!.id);
+        this.api.getProjectAudit(this.selectedProject!.id).subscribe({
+          next: (events) => { this.auditEvents = events; this.cdr.detectChanges(); }
+        });
+        if (newLogs && newLogs.length > 0) {
+          this.selectedGatewayLog = newLogs[0];
+        }
+        this.cdr.detectChanges();
+      },
+      error: () => {
+        this.isSimulatingGateway = false;
+        this.cdr.detectChanges();
+      }
+    });
+  }
+
+  runSingleGatewayCase(caseNum: 1 | 2 | 3 | 4 | 5 | 6): void {
+    if (!this.selectedProject || this.isSimulatingGateway) return;
+    this.isSimulatingGateway = true;
+    this.cdr.detectChanges();
+
+    const isSe = this.selectedProject.name.toLowerCase().includes('setocm3')
+      || this.selectedProject.name.toLowerCase().includes('subscription');
+
+    const baseWrite = isSe ? {
+      sub_id: 'SUB-2026-9001',
+      acct_num: 'ACCT-OTX-4410',
+      customer_name: 'Global FinCorp Holdings',
+      start_date: '15/11/2026',
+      auto_renew: 'Yes',
+      plan_code: 'ENTERPRISE_PLUS',
+      seat_count: '250',
+      admin: { email: 'cloud-admin@fincorp.io', phone: '+1-415-890-2211' }
+    } : {
+      order_num: 'ORD-2026-991',
+      cust_id: 'CUST-4081',
+      name: 'Dr. Sarah Connor',
+      dob: '15/08/1988',
+      active: 'Yes',
+      tier: 'GOLD_TIER',
+      contact: { email: 'sarah.c@cyberdyne.org', phone: '+1-555-0199' },
+      total_amount: 499.99
+    };
+
+    const baseRead = isSe ? {
+      subscriptionId: 'SUB-2026-9001',
+      tenantAccountId: 'ACCT-OTX-4410',
+      subscriberName: 'Global FinCorp Holdings',
+      billingStartDate: '2026-11-15',
+      autoRenewalEnabled: true,
+      tierCode: 'ENT_PLUS',
+      licensedSeats: 250,
+      primaryContactEmail: 'cloud-admin@fincorp.io',
+      primaryContactPhone: '+1-415-890-2211'
+    } : {
+      orderId: 'ORD-2026-991',
+      customerId: 'CUST-4081',
+      userName: 'Dr. Sarah Connor',
+      dateOfBirth: '1988-08-15',
+      accountEnabled: true,
+      membershipLevel: 'GLD',
+      emailAddress: 'sarah.c@cyberdyne.org',
+      telephone: '+1-555-0199',
+      totalAmount: 499.99
+    };
+
+    const writePath = isSe ? '/api/v1/subscriptions' : '/api/v1/orders';
+    const readPath = isSe ? '/api/v1/subscriptions/SUB-2026-9001' : '/api/v1/orders/ORD-2026-991';
+    const unmappedRoute = isSe ? '/api/v1/usage-events' : '/api/v1/refunds';
+
+    let req: any;
+    if (caseNum === 1) {
+      req = {
+        scenarioName: 'Case 1: Happy Path WRITE (System A -> Gateway -> System B)',
+        httpMethod: 'POST',
+        endpointPath: writePath,
+        direction: 'SOURCE_TO_TARGET',
+        payload: baseWrite,
+        unmappedFieldPolicy: this.gatewayUnmappedPolicy,
+        missingMappingPolicy: this.gatewayMissingPolicy
+      };
+    } else if (caseNum === 2) {
+      req = {
+        scenarioName: 'Case 2: Happy Path READ (System B -> Gateway Reverse -> System A)',
+        httpMethod: 'GET',
+        endpointPath: readPath,
+        direction: 'TARGET_TO_SOURCE',
+        payload: baseRead,
+        unmappedFieldPolicy: this.gatewayUnmappedPolicy,
+        missingMappingPolicy: this.gatewayMissingPolicy
+      };
+    } else if (caseNum === 3) {
+      req = {
+        scenarioName: 'Case 3: Payload with Unmapped Extra Fields (' + this.gatewayUnmappedPolicy + ')',
+        httpMethod: 'POST',
+        endpointPath: writePath,
+        direction: 'SOURCE_TO_TARGET',
+        payload: {
+          ...baseWrite,
+          legacy_region_code: 'EU-CENTRAL-FRA',
+          internal_terminal_tag: 'TERM-882'
+        },
+        unmappedFieldPolicy: this.gatewayUnmappedPolicy,
+        missingMappingPolicy: this.gatewayMissingPolicy
+      };
+    } else if (caseNum === 4) {
+      req = {
+        scenarioName: 'Case 4: Missing Mapping for Route (' + this.gatewayMissingPolicy + ')',
+        httpMethod: 'POST',
+        endpointPath: unmappedRoute,
+        direction: 'SOURCE_TO_TARGET',
+        payload: isSe
+          ? { event_id: 'EVT-88210', sub_id: 'SUB-2026-9001', api_calls_consumed: 14500 }
+          : { refund_id: 'RFD-5510', orig_order_num: 'ORD-2026-991', refund_amt: 120.00 },
+        unmappedFieldPolicy: this.gatewayUnmappedPolicy,
+        missingMappingPolicy: this.gatewayMissingPolicy,
+        forceMissingMapping: true
+      };
+    } else if (caseNum === 5) {
+      const badPayload: any = { ...baseWrite };
+      if (isSe) {
+        badPayload.start_date = '99/99/2026-INVALID';
+        badPayload.seat_count = 'NOT_A_NUMBER';
+      } else {
+        badPayload.dob = '32/13/1988-CORRUPT';
+      }
+      req = {
+        scenarioName: 'Case 5: Runtime Transformation Error (Invalid Date / Number Coercion)',
+        httpMethod: 'POST',
+        endpointPath: writePath,
+        direction: 'SOURCE_TO_TARGET',
+        payload: badPayload,
+        unmappedFieldPolicy: this.gatewayUnmappedPolicy,
+        missingMappingPolicy: this.gatewayMissingPolicy
+      };
+    } else {
+      const badValPayload: any = { ...baseWrite };
+      if (isSe) {
+        badValPayload.sub_id = '';
+        badValPayload.admin = { email: 'invalid-email-format', phone: '+1-415-890-2211' };
+      } else {
+        badValPayload.order_num = '';
+        badValPayload.contact = { email: 'invalid-email-format', phone: '+1-555-0199' };
+      }
+      req = {
+        scenarioName: 'Case 6: Target Schema Validation Failure (Missing Required ID & Invalid Email)',
+        httpMethod: 'POST',
+        endpointPath: writePath,
+        direction: 'SOURCE_TO_TARGET',
+        payload: badValPayload,
+        unmappedFieldPolicy: this.gatewayUnmappedPolicy,
+        missingMappingPolicy: this.gatewayMissingPolicy
+      };
+    }
+
+    this.api.invokeGateway(this.selectedProject.id, req).subscribe({
+      next: (logEntry) => {
+        this.isSimulatingGateway = false;
+        this.gatewayLogs.unshift(logEntry);
+        this.selectedGatewayLog = logEntry;
+        this.api.getProjectAudit(this.selectedProject!.id).subscribe({
+          next: (events) => { this.auditEvents = events; this.cdr.detectChanges(); }
+        });
+        this.cdr.detectChanges();
+      },
+      error: () => {
+        this.isSimulatingGateway = false;
+        this.cdr.detectChanges();
+      }
+    });
+  }
+
+  clearGatewayHistory(): void {
+    if (!this.selectedProject) return;
+    this.api.clearGatewayLogs(this.selectedProject.id).subscribe({
+      next: () => {
+        this.gatewayLogs = [];
+        this.selectedGatewayLog = null;
+        this.cdr.detectChanges();
+      }
+    });
+  }
+
+  seedTwoSampleProjects(forceReset: boolean = true): void {
+    if (this.isSeedingDemoProjects) return;
+    this.isSeedingDemoProjects = true;
+    this.cdr.detectChanges();
+    this.api.seedAllDemoProjects(forceReset).subscribe({
+      next: () => {
+        this.isSeedingDemoProjects = false;
+        this.selectedProject = null;
+        this.loadProjects();
+        this.cdr.detectChanges();
+      },
+      error: () => {
+        this.isSeedingDemoProjects = false;
+        this.cdr.detectChanges();
+      }
+    });
+  }
+
+  copyText(text: string, label: string = 'URL'): void {
+    if (!text) return;
+    navigator.clipboard?.writeText(text);
+    this.copiedUrlBanner = `Copied ${label}: ${text}`;
+    this.cdr.detectChanges();
+    setTimeout(() => {
+      this.copiedUrlBanner = '';
+      this.cdr.detectChanges();
+    }, 3500);
   }
 
   // Auto-import schemas from the first API that has both source + target schemas configured
@@ -291,9 +577,10 @@ export class App implements OnInit {
     this.newApiName = '';
     this.newApiDescription = '';
     this.newApiMethod = 'POST';
-    this.newApiPath = '/api/v1/';
+    this.newApiPath = '/api/v1/customers';
     this.newApiDirection = 'SOURCE_TO_TARGET';
-    this.newApiTargetUrl = '';
+    this.newApiSourceUrl = (this.selectedProject?.sourceSystemUrl || 'http://localhost:8080/mock/system-a') + '/api/v1/customers';
+    this.newApiTargetUrl = (this.selectedProject?.targetSystemUrl || 'http://localhost:8080/mock/system-b') + '/api/v1/customers';
     // Pre-fill schemas from Setup tab if available (e.g. loaded via "Load Sample"), otherwise use defaults
     this.newApiSourceSchema = this.sourceSchemaInput?.trim()
       ? this.sourceSchemaInput
@@ -316,6 +603,7 @@ export class App implements OnInit {
       httpMethod: this.newApiMethod,
       endpointPath: this.newApiPath.trim(),
       direction,
+      sourceUrl: this.newApiSourceUrl,
       targetUrl: this.newApiTargetUrl,
       sourceSchema: sourceJson,
       targetSchema: targetJson
@@ -430,6 +718,9 @@ export class App implements OnInit {
       next: (res) => {
         this.isTestingApi = false;
         this.apiTestResult = res;
+        if (this.selectedProject) {
+          this.loadGatewayLogs(this.selectedProject.id);
+        }
         this.cdr.detectChanges();
       },
       error: (err) => {
@@ -538,7 +829,11 @@ export class App implements OnInit {
       name: this.newProjectName.trim(),
       description: this.newProjectDescription.trim(),
       sourceSystemName: this.newProjectSourceSystem.trim(),
+      sourceSystemUrl: this.newProjectSourceUrl.trim(),
       targetSystemName: this.newProjectTargetSystem.trim(),
+      targetSystemUrl: this.newProjectTargetUrl.trim(),
+      unmappedFieldPolicy: this.newProjectUnmappedPolicy,
+      missingMappingPolicy: this.newProjectMissingPolicy,
       approverEmail: this.newProjectApproverEmail.trim(),
       autoApproveEnabled: this.newProjectAutoApprove
     }).subscribe({
@@ -744,7 +1039,8 @@ export class App implements OnInit {
   }
 
   // Pre-fill Sample Schema and automatically extract fields into database
-  loadPromptSampleData(): void {    if (!this.selectedProject) return;
+  loadPromptSampleData(): void {
+    if (!this.selectedProject) return;
     this.sourceSchemaInput = `{\n  "name": "Baljinder Singh",\n  "dob": "10/05/1992",\n  "active": "Yes",\n  "project_id": 1001,\n  "contact": {\n    "email": "user@example.com"\n  }\n}`;
     this.targetSchemaInput = `{\n  "userName": "string",\n  "dateOfBirth": "yyyy-MM-dd",\n  "accountEnabled": "boolean",\n  "projectId": "string",\n  "emailAddress": "string"\n}`;
     this.isImportingSchemas = true;
@@ -963,7 +1259,7 @@ export class App implements OnInit {
 
   // Generate Mappings
   generateMappings(): void {
-    if (!this.selectedProject) return;
+    if (!this.selectedProject || this.isSavingRules || this.isConvertingNl) return;
     this.setupErrorMessage = '';
     this.cdr.detectChanges();
     this.api.generateMappings(this.selectedProject.id).subscribe({
@@ -981,15 +1277,26 @@ export class App implements OnInit {
 
   // Natural Language Rule Conversion
   convertNaturalLanguage(): void {
-    if (!this.selectedProject || !this.nlInstruction.trim()) return;
+    if (!this.selectedProject || !this.nlInstruction.trim() || this.isConvertingNl || this.isSavingRules) return;
+    const projectId = this.selectedProject.id;
     this.isConvertingNl = true;
+    this.ruleSaveError = '';
     this.cdr.detectChanges();
-    this.api.convertNaturalLanguage(this.selectedProject.id, this.nlInstruction).subscribe({
+    this.api.convertNaturalLanguage(projectId, this.nlInstruction).subscribe({
       next: (rule) => {
+        if (this.selectedProject?.id !== projectId) {
+          this.isConvertingNl = false;
+          this.cdr.detectChanges();
+          return;
+        }
         // Automatically persist rule into project's active mapping
-        this.api.addCustomRule(this.selectedProject!.id, rule).subscribe({
+        this.api.addCustomRule(projectId, rule).subscribe({
           next: (updatedMapping) => {
             this.isConvertingNl = false;
+            if (this.selectedProject?.id !== projectId) {
+              this.cdr.detectChanges();
+              return;
+            }
             // Directly set activeMapping without calling loadProjectData (which resets it to null first)
             this.activeMapping = updatedMapping;
             // Also update the versions list entry if it exists
@@ -1002,20 +1309,20 @@ export class App implements OnInit {
             this.nlInstruction = '';
             this.cdr.detectChanges();
           },
-          error: () => {
+          error: (err) => {
             this.isConvertingNl = false;
-            if (this.activeMapping) {
-              this.activeMapping.rules.unshift(rule);
+            if (this.selectedProject?.id === projectId) {
+              this.ruleSaveError = err.error?.message || 'The suggested rule could not be saved. Your instruction has been retained.';
             }
-            this.ruleFilter = 'ALL';
-            this.nlInstruction = '';
             this.cdr.detectChanges();
           }
         });
       },
       error: (err) => {
         this.isConvertingNl = false;
-        alert('Natural language rule generation failed: ' + (err.error?.message || err.message));
+        if (this.selectedProject?.id === projectId) {
+          this.ruleSaveError = err.error?.message || 'Natural language rule generation failed. Please try again.';
+        }
         this.cdr.detectChanges();
       }
     });
@@ -1023,6 +1330,7 @@ export class App implements OnInit {
 
   // Custom Mapping Rule Modal Operations
   openCustomRuleModal(): void {
+    if (this.isSavingRules || this.isConvertingNl) return;
     this.customRuleSourcePaths = this.sourceFields.length > 0 ? this.sourceFields[0].fieldPath : '';
     this.customRuleTargetPath = this.targetFields.length > 0 ? this.targetFields[0].fieldPath : '';
     this.customRuleOperation = 'RENAME';
@@ -1034,7 +1342,7 @@ export class App implements OnInit {
   }
 
   saveCustomRule(): void {
-    if (!this.selectedProject || !this.customRuleTargetPath.trim()) return;
+    if (!this.selectedProject || !this.customRuleTargetPath.trim() || this.isSavingRules || this.isConvertingNl) return;
 
     const sources = this.customRuleSourcePaths.split(',').map(s => s.trim()).filter(s => s.length > 0);
     const params: Record<string, any> = {};
@@ -1085,7 +1393,7 @@ export class App implements OnInit {
 
   // Approve & Publish
   approveMapping(): void {
-    if (!this.selectedProject || !this.activeMapping) return;
+    if (!this.selectedProject || !this.activeMapping || this.isSavingRules || this.isConvertingNl || this.activeMapping.status === 'PUBLISHED') return;
     this.api.approveMapping(this.selectedProject.id, this.activeMapping.id).subscribe({
       next: (m) => {
         this.activeMapping = m;
@@ -1095,7 +1403,7 @@ export class App implements OnInit {
   }
 
   publishMapping(): void {
-    if (!this.selectedProject || !this.activeMapping) return;
+    if (!this.selectedProject || !this.activeMapping || this.isSavingRules || this.isConvertingNl || this.activeMapping.status !== 'APPROVED') return;
     this.api.publishMapping(this.selectedProject.id, this.activeMapping.id).subscribe({
       next: (m) => {
         this.activeMapping = m;
@@ -1108,7 +1416,7 @@ export class App implements OnInit {
   }
 
   cloneMapping(): void {
-    if (!this.selectedProject || !this.activeMapping) return;
+    if (!this.selectedProject || !this.activeMapping || this.isSavingRules || this.isConvertingNl) return;
     this.api.cloneMapping(this.selectedProject.id, this.activeMapping.id).subscribe({
       next: (m) => {
         this.activeMapping = m;
@@ -1120,7 +1428,7 @@ export class App implements OnInit {
 
   // Transformation Preview
   runTransformation(): void {
-    if (!this.selectedProject) return;
+    if (!this.selectedProject || this.isSavingRules) return;
     this.isTransforming = true;
     this.cdr.detectChanges();
     let payloadObj: any;
@@ -1161,26 +1469,64 @@ export class App implements OnInit {
   }
 
   // Edit Rule
-  openEditRule(rule: MappingRule, index: number): void {
-    this.editingRule = { ...rule };
-    this.editingRuleIndex = index;
+  openEditRule(rule: MappingRule): void {
+    if (!rule.id || this.isSavingRules || this.isConvertingNl || this.activeMapping?.status === 'PUBLISHED') return;
+    this.editingRule = structuredClone(rule);
+    this.editingRuleId = rule.id;
+    this.ruleSaveError = '';
     this.showEditRuleModal = true;
     this.cdr.detectChanges();
   }
 
   saveEditedRule(): void {
-    if (this.editingRule && this.activeMapping && this.editingRuleIndex >= 0) {
-      this.activeMapping.rules[this.editingRuleIndex] = this.editingRule;
-      this.showEditRuleModal = false;
-      this.cdr.detectChanges();
-    }
+    if (!this.editingRule || !this.activeMapping || !this.editingRuleId) return;
+    if (!this.activeMapping.rules.some(rule => rule.id === this.editingRuleId)) return;
+    const editedRule = structuredClone(this.editingRule);
+    const rules = this.activeMapping.rules.map(rule => rule.id === this.editingRuleId ? editedRule : rule);
+    this.persistRules(rules, true);
   }
 
-  deleteRule(index: number): void {
-    if (this.activeMapping && this.activeMapping.rules) {
-      this.activeMapping.rules.splice(index, 1);
+  deleteRule(rule: MappingRule): void {
+    if (!rule.id || !this.activeMapping || !this.activeMapping.rules.some(savedRule => savedRule.id === rule.id)) return;
+    this.persistRules(this.activeMapping.rules.filter(savedRule => savedRule.id !== rule.id));
+  }
+
+  private persistRules(rules: MappingRule[], closeEditor: boolean = false): void {
+    if (!this.selectedProject || !this.activeMapping || this.isSavingRules || this.isConvertingNl) return;
+    if (this.activeMapping.status === 'PUBLISHED') {
+      this.ruleSaveError = 'Published mapping versions are read-only. Clone this version before editing.';
       this.cdr.detectChanges();
+      return;
     }
+    const projectId = this.selectedProject.id;
+    const mappingId = this.activeMapping.id;
+    this.isSavingRules = true;
+    this.ruleSaveError = '';
+    this.cdr.detectChanges();
+    this.api.updateRules(projectId, mappingId, rules).subscribe({
+      next: (mapping) => {
+        this.isSavingRules = false;
+        if (this.selectedProject?.id === projectId && this.activeMapping?.id === mappingId) {
+          this.activeMapping = mapping;
+          this.versions = this.versions.map(version => version.id === mappingId ? mapping : version);
+          this.previewResult = null;
+          this.transformedPayloadText = '';
+          if (closeEditor) {
+            this.showEditRuleModal = false;
+            this.editingRule = null;
+            this.editingRuleId = null;
+          }
+        }
+        this.cdr.detectChanges();
+      },
+      error: (err) => {
+        this.isSavingRules = false;
+        if (this.selectedProject?.id === projectId && this.activeMapping?.id === mappingId) {
+          this.ruleSaveError = err.error?.message || 'Mapping changes could not be saved. Please try again.';
+        }
+        this.cdr.detectChanges();
+      }
+    });
   }
 
   // Asymmetric Schema: Trace live JSON/cURL payload for system with NO Swagger
@@ -1355,7 +1701,7 @@ export class App implements OnInit {
 
   // Batch Approval Operations
   approveAllMappings(): void {
-    if (!this.selectedProject || !this.activeMapping) return;
+    if (!this.selectedProject || !this.activeMapping || this.isSavingRules || this.isConvertingNl || this.activeMapping.status === 'PUBLISHED') return;
     this.isApprovingAll = true;
     this.approvalSuccessMessage = '';
     this.cdr.detectChanges();
@@ -1377,7 +1723,7 @@ export class App implements OnInit {
   }
 
   approveAllHighConfidence(): void {
-    if (!this.selectedProject || !this.activeMapping) return;
+    if (!this.selectedProject || !this.activeMapping || this.isSavingRules || this.isConvertingNl || this.activeMapping.status === 'PUBLISHED') return;
     this.isApprovingHighConfidence = true;
     this.approvalSuccessMessage = '';
     this.cdr.detectChanges();
@@ -1402,7 +1748,7 @@ export class App implements OnInit {
 
   // Invert Mapping (Bi-directional inversion)
   invertCurrentMapping(): void {
-    if (!this.selectedProject || !this.activeMapping) return;
+    if (!this.selectedProject || !this.activeMapping || this.isSavingRules || this.isConvertingNl) return;
     if (!confirm(`Generate inverse bidirectional mapping for ${this.activeMapping.rules.length} rules? This creates a new mapping reversing target -> source.`)) {
       return;
     }

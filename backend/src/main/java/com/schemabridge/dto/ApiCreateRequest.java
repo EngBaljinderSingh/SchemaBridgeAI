@@ -27,6 +27,8 @@ public class ApiCreateRequest {
     @Builder.Default
     private Direction direction = Direction.SOURCE_TO_TARGET;
 
+    private String sourceUrl;
+
     private String targetUrl;
 
     private String sourceSchema;

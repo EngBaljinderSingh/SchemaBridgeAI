@@ -5,8 +5,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.schemabridge.domain.enums.Direction;
 import com.schemabridge.domain.enums.MappingStatus;
 import com.schemabridge.domain.enums.SchemaType;
+import com.schemabridge.domain.enums.MatchMethod;
 import com.schemabridge.dto.*;
 import com.schemabridge.exception.ValidationException;
+import com.schemabridge.repository.MappingDefinitionRepository;
 import com.schemabridge.service.MappingService;
 import com.schemabridge.service.ProjectService;
 import org.junit.jupiter.api.DisplayName;
@@ -16,6 +18,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -31,6 +34,9 @@ class SchemaBridgeEndToEndIntegrationTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+        @Autowired
+        private MappingDefinitionRepository mappingRepository;
 
     @Test
     @DisplayName("End-to-End Flow: Complete integration from project creation to deterministic transformation and publishing")
@@ -128,5 +134,139 @@ class SchemaBridgeEndToEndIntegrationTest {
                     RuleUpdateRequest.builder().sourcePaths(List.of("name")).targetPath("userName").operation(com.schemabridge.domain.enums.TransformationOpType.RENAME).build()
             ));
         }, "Cannot modify a PUBLISHED mapping version directly.");
+    }
+
+    @Test
+    void ruleEditsPreserveUntouchedIdentityAndProvenance() {
+        MappingDefinitionDto mapping = createReviewMapping();
+        MappingRuleDto editedRule = mapping.getRules().get(0);
+        MappingRuleDto untouchedRule = mapping.getRules().get(1);
+        List<RuleUpdateRequest> updates = mapping.getRules().stream().map(this::toUpdate).toList();
+        updates.get(0).setExplanation("Reviewed field mapping");
+
+        MappingDefinitionDto saved = mappingService.updateRules(mapping.getId(), updates);
+        MappingRuleDto savedEdited = saved.getRules().stream()
+                .filter(rule -> rule.getId().equals(editedRule.getId())).findFirst().orElseThrow();
+        MappingRuleDto savedUntouched = saved.getRules().stream()
+                .filter(rule -> rule.getId().equals(untouchedRule.getId())).findFirst().orElseThrow();
+
+        assertEquals("Reviewed field mapping", savedEdited.getExplanation());
+        assertEquals(MappingStatus.SUGGESTED, savedEdited.getStatus());
+        assertEquals(untouchedRule.getMatchMethod(), savedUntouched.getMatchMethod());
+        assertEquals(0, untouchedRule.getConfidence().compareTo(savedUntouched.getConfidence()));
+        assertEquals(untouchedRule.getStatus(), savedUntouched.getStatus());
+        assertEquals(MatchMethod.EXACT, savedUntouched.getMatchMethod());
+        assertEquals(2, mappingService.getMappingById(mapping.getId()).getRules().size());
+        assertEquals(MappingStatus.DRAFT, saved.getStatus());
+        assertNull(saved.getApprovedBy());
+    }
+
+    @Test
+    void ruleUpdatesRejectUnknownAndDuplicateIdentitiesWithoutChangingSavedRules() {
+        MappingDefinitionDto mapping = createReviewMapping();
+        RuleUpdateRequest unknownRule = toUpdate(mapping.getRules().get(0));
+        unknownRule.setId("another-mappings-rule");
+        assertThrows(ValidationException.class,
+                () -> mappingService.updateRules(mapping.getId(), List.of(unknownRule)));
+
+        RuleUpdateRequest duplicateRule = toUpdate(mapping.getRules().get(0));
+        assertThrows(ValidationException.class,
+                () -> mappingService.updateRules(mapping.getId(), List.of(duplicateRule, duplicateRule)));
+        assertEquals(2, mappingService.getMappingById(mapping.getId()).getRules().size());
+    }
+
+    @Test
+    void unapprovedMappingsCannotBePublished() {
+        MappingDefinitionDto mapping = createReviewMapping();
+        assertThrows(ValidationException.class,
+                () -> mappingService.publishMapping(mapping.getId(), "reviewer"));
+        assertEquals(MappingStatus.REVIEW_REQUIRED, mappingService.getMappingById(mapping.getId()).getStatus());
+    }
+
+    @Test
+    void publicationRequiresEveryRuleToBeApproved() {
+        MappingDefinitionDto mapping = createReviewMapping();
+        var entity = mappingRepository.findById(mapping.getId()).orElseThrow();
+        entity.setStatus(MappingStatus.APPROVED);
+        mappingRepository.saveAndFlush(entity);
+
+        assertThrows(ValidationException.class,
+                () -> mappingService.publishMapping(mapping.getId(), "reviewer"));
+    }
+
+    @Test
+    void runtimeRejectsUnpublishedMappingsWithOrWithoutAnExplicitVersion() {
+        MappingDefinitionDto mapping = createReviewMapping();
+        TransformationExecuteRequest request = TransformationExecuteRequest.builder()
+                .sourcePayload(Map.of("name", "Alice", "email", "alice@example.test"))
+                .build();
+        assertThrows(ValidationException.class,
+                () -> mappingService.executeTransformation(mapping.getProjectId(), request));
+
+        request.setMappingVersion(mapping.getVersion());
+        assertThrows(ValidationException.class,
+                () -> mappingService.executeTransformation(mapping.getProjectId(), request));
+    }
+
+    @Test
+    void publishedMappingsCannotBeReopenedThroughApprovalEndpoints() {
+        MappingDefinitionDto mapping = createReviewMapping();
+        mappingService.approveMapping(mapping.getId(), "reviewer");
+                MappingDefinitionDto published = mappingService.publishMapping(mapping.getId(), "publisher");
+
+                assertEquals("reviewer", published.getApprovedBy());
+        assertThrows(ValidationException.class,
+                () -> mappingService.approveMapping(mapping.getId(), "editor"));
+        assertThrows(ValidationException.class,
+                () -> mappingService.approveAllHighConfidence(mapping.getId(), "editor"));
+        assertEquals(MappingStatus.PUBLISHED, mappingService.getMappingById(mapping.getId()).getStatus());
+    }
+
+        @Test
+        void removingARulePersistsOnlyTheRetainedIdentityAndClearsApproval() {
+                MappingDefinitionDto mapping = createReviewMapping();
+                MappingDefinitionDto approved = mappingService.approveMapping(mapping.getId(), "reviewer");
+                MappingRuleDto retainedRule = approved.getRules().get(1);
+
+                mappingService.updateRules(mapping.getId(), List.of(toUpdate(retainedRule)));
+                MappingDefinitionDto reloaded = mappingService.getMappingById(mapping.getId());
+
+                assertEquals(1, reloaded.getRules().size());
+                assertEquals(retainedRule.getId(), reloaded.getRules().get(0).getId());
+                assertEquals(MatchMethod.EXACT, reloaded.getRules().get(0).getMatchMethod());
+                assertEquals(MappingStatus.DRAFT, reloaded.getStatus());
+                assertNull(reloaded.getApprovedBy());
+                assertNull(reloaded.getApprovedAt());
+        }
+
+        @Test
+        void draftMappingsRemainAvailableForPreview() {
+                MappingDefinitionDto mapping = createReviewMapping();
+                TransformationPreviewResponse preview = mappingService.previewTransformation(mapping.getProjectId(),
+                                TransformationPreviewRequest.builder().mappingDefinitionId(mapping.getId())
+                                                .sourcePayload(Map.of("name", "Alice", "email", "alice@example.test")).build());
+
+                JsonNode payload = objectMapper.valueToTree(preview.getTransformedPayload());
+                assertEquals("Alice", payload.get("name").asText());
+                assertTrue(preview.getValidation().isValid());
+        }
+
+    private MappingDefinitionDto createReviewMapping() {
+        ProjectResponse project = projectService.createProject(ProjectCreateRequest.builder()
+                .name("Mapping safety regression").autoApproveEnabled(false).build());
+        projectService.importSchema(project.getId(), SchemaImportRequest.builder()
+                .direction(Direction.SOURCE_TO_TARGET).schemaType(SchemaType.SAMPLE_JSON)
+                .schemaContent("{\"name\":\"Alice\",\"email\":\"alice@example.test\"}").build());
+        projectService.importSchema(project.getId(), SchemaImportRequest.builder()
+                .direction(Direction.TARGET_TO_SOURCE).schemaType(SchemaType.SAMPLE_JSON)
+                .schemaContent("{\"name\":\"string\",\"email\":\"string\"}").build());
+        return mappingService.generateMappingSuggestions(project.getId(), Direction.SOURCE_TO_TARGET);
+    }
+
+    private RuleUpdateRequest toUpdate(MappingRuleDto rule) {
+        return RuleUpdateRequest.builder()
+                .id(rule.getId()).sourcePaths(rule.getSourcePaths()).targetPath(rule.getTargetPath())
+                .operation(rule.getOperation()).parameters(rule.getParameters())
+                .status(rule.getStatus()).explanation(rule.getExplanation()).build();
     }
 }

@@ -17,6 +17,8 @@ backend/data/
 # Frontend build
 frontend/dist/
 frontend/.angular/
+frontend/test-results/
+frontend/playwright-report/
 node_modules/
 
 # Python

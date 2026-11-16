@@ -180,29 +180,57 @@ public class MappingService {
             throw new ValidationException("Cannot modify a PUBLISHED mapping version directly. Clone or create a new version.");
         }
 
-        mapping.getRules().clear();
-
-        List<MappingRule> newRules = new ArrayList<>();
+        Map<String, MappingRule> existingRules = mapping.getRules().stream()
+                .collect(Collectors.toMap(MappingRule::getId, rule -> rule));
+        Set<String> retainedIds = new HashSet<>();
+        List<MappingRule> updatedRules = new ArrayList<>();
         for (RuleUpdateRequest req : ruleUpdates) {
-            MappingRule r = MappingRule.builder()
-                    .mappingDefinition(mapping)
-                    .sourcePaths(writeJson(req.getSourcePaths()))
-                    .targetPath(req.getTargetPath())
-                    .operation(req.getOperation())
-                    .parametersJson(writeJson(req.getParameters()))
-                    .matchMethod(com.schemabridge.domain.enums.MatchMethod.MANUAL)
-                    .confidence(BigDecimal.valueOf(1.000))
-                    .status(req.getStatus() != null ? req.getStatus() : MappingStatus.APPROVED)
-                    .explanation(req.getExplanation() != null ? req.getExplanation() : "User approved rule")
-                    .build();
-            newRules.add(r);
+            if (req == null || req.getTargetPath() == null || req.getTargetPath().isBlank()
+                    || req.getOperation() == null || req.getSourcePaths() == null) {
+                throw new ValidationException("Each rule requires source paths, a target path and an operation.");
+            }
+            MappingRule rule;
+            if (req.getId() != null) {
+                rule = existingRules.get(req.getId());
+                if (rule == null || !retainedIds.add(req.getId())) {
+                    throw new ValidationException("Unknown or duplicate rule ID for this mapping: " + req.getId());
+                }
+            } else {
+                rule = MappingRule.builder().mappingDefinition(mapping).build();
+                retainedIds.add(rule.getId());
+            }
+            Map<String, Object> parameters = req.getParameters() != null ? req.getParameters() : Map.of();
+            boolean changed = !existingRules.containsKey(rule.getId())
+                    || !Objects.equals(parseJsonList(rule.getSourcePaths()), req.getSourcePaths())
+                    || !Objects.equals(rule.getTargetPath(), req.getTargetPath())
+                    || rule.getOperation() != req.getOperation()
+                    || !Objects.equals(parseJsonMap(rule.getParametersJson()), parameters)
+                    || !Objects.equals(rule.getExplanation(), req.getExplanation());
+            if (changed) {
+                rule.setSourcePaths(writeJson(req.getSourcePaths()));
+                rule.setTargetPath(req.getTargetPath());
+                rule.setOperation(req.getOperation());
+                rule.setParametersJson(writeJson(parameters));
+                rule.setMatchMethod(com.schemabridge.domain.enums.MatchMethod.MANUAL);
+                rule.setConfidence(BigDecimal.ONE);
+                rule.setStatus(MappingStatus.SUGGESTED);
+                rule.setExplanation(req.getExplanation());
+            }
+            updatedRules.add(rule);
         }
-        mapping.getRules().addAll(newRules);
+        mapping.getRules().removeIf(rule -> !retainedIds.contains(rule.getId()));
+        for (MappingRule rule : updatedRules) {
+            if (!existingRules.containsKey(rule.getId())) {
+                mapping.getRules().add(rule);
+            }
+        }
         mapping.setStatus(MappingStatus.DRAFT);
+        mapping.setApprovedBy(null);
+        mapping.setApprovedAt(null);
         mapping = mappingDefinitionRepository.save(mapping);
 
         auditService.recordEvent("MappingDefinition", mappingId, "UPDATE_RULES", "user", null,
-                "Updated " + newRules.size() + " rules for mapping v" + mapping.getVersion());
+                "Updated " + updatedRules.size() + " rules for mapping v" + mapping.getVersion());
 
         return mapToMappingDto(mapping, List.of(), List.of(), List.of());
     }
@@ -283,6 +311,9 @@ public class MappingService {
         MappingDefinition mapping = mappingDefinitionRepository.findById(mappingId)
                 .orElseThrow(() -> new ResourceNotFoundException("MappingDefinition", mappingId));
 
+        if (mapping.getStatus() == MappingStatus.PUBLISHED) {
+            throw new ValidationException("Published mappings cannot be reopened. Clone this version before editing.");
+        }
         mapping.setStatus(MappingStatus.APPROVED);
         mapping.setApprovedBy(approvedBy != null ? approvedBy : "admin");
         mapping.setApprovedAt(LocalDateTime.now());
@@ -305,6 +336,9 @@ public class MappingService {
         MappingDefinition mapping = mappingDefinitionRepository.findById(mappingId)
                 .orElseThrow(() -> new ResourceNotFoundException("MappingDefinition", mappingId));
 
+        if (mapping.getStatus() == MappingStatus.PUBLISHED) {
+            throw new ValidationException("Published mappings cannot be reopened. Clone this version before editing.");
+        }
         int approvedCount = 0;
         for (MappingRule r : mapping.getRules()) {
             if (r.getConfidence() != null && r.getConfidence().doubleValue() >= 0.90) {
@@ -430,6 +464,12 @@ public class MappingService {
         MappingDefinition mapping = mappingDefinitionRepository.findById(mappingId)
                 .orElseThrow(() -> new ResourceNotFoundException("MappingDefinition", mappingId));
 
+        if (mapping.getStatus() != MappingStatus.APPROVED) {
+            throw new ValidationException("Approve this mapping version before publishing.");
+        }
+        if (mapping.getRules().stream().anyMatch(rule -> rule.getStatus() != MappingStatus.APPROVED)) {
+            throw new ValidationException("All mapping rules must be approved before publishing.");
+        }
         // Validation before publishing
         List<MappingRule> rules = mapping.getRules();
         if (rules.isEmpty()) {
@@ -460,8 +500,6 @@ public class MappingService {
         }
 
         mapping.setStatus(MappingStatus.PUBLISHED);
-        mapping.setApprovedBy(publishedBy != null ? publishedBy : "admin");
-        mapping.setApprovedAt(LocalDateTime.now());
         mappingDefinitionRepository.save(mapping);
 
         auditService.recordEvent("MappingDefinition", mappingId, "PUBLISH", publishedBy, null,
@@ -569,11 +607,10 @@ public class MappingService {
         } else {
             mapping = mappingDefinitionRepository.findFirstByProjectIdAndDirectionAndStatusOrderByVersionDesc(
                     projectId, Direction.SOURCE_TO_TARGET, MappingStatus.PUBLISHED)
-                    .orElseGet(() -> {
-                        List<MappingDefinition> any = mappingDefinitionRepository.findByProjectIdOrderByVersionDesc(projectId);
-                        if (any.isEmpty()) throw new ValidationException("No mappings exist for project " + projectId);
-                        return any.get(0);
-                    });
+                    .orElseThrow(() -> new ValidationException("No published mapping exists for project " + projectId));
+        }
+        if (mapping.getStatus() != MappingStatus.PUBLISHED) {
+            throw new ValidationException("Only published mapping versions can be executed. Use preview for draft mappings.");
         }
 
         // Execute deterministic transformation

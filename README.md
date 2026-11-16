@@ -166,7 +166,21 @@ curl -X POST http://localhost:8080/api/projects/{projectId}/schemas/source \
 curl -X POST http://localhost:8080/api/projects/{projectId}/mappings/generate
 ```
 
-### 4. Execute Deterministic Transformation
+### 4. Review, Approve and Publish
+
+Review the generated rules before approving and publishing the selected mapping:
+
+```bash
+curl -X POST http://localhost:8080/api/projects/{projectId}/mappings/{mappingId}/approve-all
+curl -X POST http://localhost:8080/api/projects/{projectId}/mappings/{mappingId}/publish
+```
+
+Publication requires an approved mapping and approved rules. Updating rules resets the mapping to `DRAFT` and clears its approval metadata; changed or new rules require review again. Published versions are read-only: clone a version before editing it. Publishing retains the original approval identity and records the publisher in a separate audit event.
+
+### 5. Execute Deterministic Transformation
+
+The project execution endpoint accepts only published mappings, including when an explicit `mappingVersion` is supplied. Without a version, it selects the latest published forward mapping. Use `/api/projects/{projectId}/transform/preview` with `mappingDefinitionId` for draft testing instead. Lifecycle validation failures return HTTP `422`.
+
 ```bash
 curl -X POST http://localhost:8080/api/projects/{projectId}/transform/execute \
   -H "Content-Type: application/json" \
@@ -182,7 +196,7 @@ curl -X POST http://localhost:8080/api/projects/{projectId}/transform/execute \
   }'
 ```
 
-### 5. Check Aviator ADT Health
+### 6. Check Aviator ADT Health
 ```bash
 curl http://localhost:8080/api/aviator/health
 ```
@@ -191,19 +205,36 @@ curl http://localhost:8080/api/aviator/health
 
 ## Running Tests
 
-### Backend Unit & Integration Tests (18 Tests):
+### Backend Unit & Integration Tests:
 ```bash
 cd backend
 mvn test
 ```
 
-### Playwright E2E UI Tests:
+### Frontend Unit Tests:
 ```bash
 cd frontend
+npm test -- --watch=false
+npm run build
+```
+
+### Playwright E2E UI Tests:
+
+Start the backend and frontend first. The frontend development proxy forwards `/api` to port 8080 by default; see [frontend/README.md](frontend/README.md) for alternate ports.
+
+```bash
+cd frontend
+npx playwright install chromium
 npx playwright test
 ```
 
 ---
+
+## Implementation Status
+
+The first hardening batch adds server-confirmed rule editing/removal by stable ID, retained rule provenance, inline save errors, draft/publication/runtime checks, and same-origin frontend API requests. Regression tests cover persistence failures, filtered rule identity, release gates and the browser workflow.
+
+This is not yet production-ready. Authentication/project authorization, optimistic concurrency, immutable deployed mapping artifacts, responsive workspace redesign, and Kafka/RabbitMQ delivery remain planned. Registered-API transformation still follows its legacy mapping-generation path and has not yet been moved behind the published-only project execution boundary.
 
 ## Security & Observability
 

@@ -69,7 +69,7 @@ public class MappingController {
     public ResponseEntity<MappingDefinitionDto> approveMapping(
             @PathVariable String projectId,
             @PathVariable String mappingId,
-            @RequestParam(required = false, defaultValue = "admin") String approvedBy) {
+            @RequestParam(required = false, defaultValue = "baljinders@opentext.com") String approvedBy) {
         return ResponseEntity.ok(mappingService.approveMapping(mappingId, approvedBy));
     }
 
@@ -78,7 +78,7 @@ public class MappingController {
     public ResponseEntity<MappingDefinitionDto> approveAll(
             @PathVariable String projectId,
             @PathVariable String mappingId,
-            @RequestParam(required = false, defaultValue = "admin") String approvedBy) {
+            @RequestParam(required = false, defaultValue = "baljinders@opentext.com") String approvedBy) {
         return ResponseEntity.ok(mappingService.approveMapping(mappingId, approvedBy));
     }
 
@@ -87,7 +87,7 @@ public class MappingController {
     public ResponseEntity<MappingDefinitionDto> approveAllHighConfidence(
             @PathVariable String projectId,
             @PathVariable String mappingId,
-            @RequestParam(required = false, defaultValue = "admin") String approvedBy) {
+            @RequestParam(required = false, defaultValue = "baljinders@opentext.com") String approvedBy) {
         return ResponseEntity.ok(mappingService.approveAllHighConfidence(mappingId, approvedBy));
     }
 
@@ -96,7 +96,7 @@ public class MappingController {
     public ResponseEntity<MappingDefinitionDto> invertMapping(
             @PathVariable String projectId,
             @PathVariable String mappingId,
-            @RequestParam(required = false, defaultValue = "system (inverted)") String createdBy) {
+            @RequestParam(required = false, defaultValue = "baljinders@opentext.com") String createdBy) {
         return ResponseEntity.status(HttpStatus.CREATED).body(mappingService.invertMapping(mappingId, createdBy));
     }
 
@@ -105,7 +105,7 @@ public class MappingController {
     public ResponseEntity<MappingDefinitionDto> publishMapping(
             @PathVariable String projectId,
             @PathVariable String mappingId,
-            @RequestParam(required = false, defaultValue = "admin") String publishedBy) {
+            @RequestParam(required = false, defaultValue = "baljinders@opentext.com") String publishedBy) {
         return ResponseEntity.ok(mappingService.publishMapping(mappingId, publishedBy));
     }
 

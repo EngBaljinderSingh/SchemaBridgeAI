@@ -22,6 +22,13 @@ public class ProjectResponse {
     private LocalDateTime updatedAt;
     private String approverEmail;
     private boolean autoApproveEnabled;
+    private String sourceSystemName;
+    private String sourceSystemUrl;
+    private String gatewayUrl;
+    private String targetSystemName;
+    private String targetSystemUrl;
+    private String unmappedFieldPolicy;
+    private String missingMappingPolicy;
     private int systemCount;
     private int mappingVersionCount;
     private Integer latestPublishedVersion;

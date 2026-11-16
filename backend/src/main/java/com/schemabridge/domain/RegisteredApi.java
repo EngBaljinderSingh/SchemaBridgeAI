@@ -43,6 +43,9 @@ public class RegisteredApi {
     @Builder.Default
     private Direction direction = Direction.SOURCE_TO_TARGET;
 
+    @Column(name = "source_url", length = 500)
+    private String sourceUrl;
+
     @Column(name = "target_url", length = 500)
     private String targetUrl;
 

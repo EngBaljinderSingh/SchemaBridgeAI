@@ -9,7 +9,12 @@ export interface Project {
   approverEmail?: string;
   autoApproveEnabled?: boolean;
   sourceSystemName?: string;
+  sourceSystemUrl?: string;
+  gatewayUrl?: string;
   targetSystemName?: string;
+  targetSystemUrl?: string;
+  unmappedFieldPolicy?: string;
+  missingMappingPolicy?: string;
   systemCount: number;
   mappingVersionCount: number;
   latestPublishedVersion?: number;
@@ -152,12 +157,42 @@ export interface RegisteredApi {
   httpMethod: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | string;
   endpointPath: string;
   direction: 'SOURCE_TO_TARGET' | 'TARGET_TO_SOURCE';
+  sourceUrl?: string;
+  gatewayUrl?: string;
   targetUrl?: string;
   sourceSchema?: string;
   targetSchema?: string;
-  status: 'ACTIVE' | 'DRAFT' | 'DEPRECATED';
+  status: 'ACTIVE' | 'DRAFT' | 'DEPRECATED' | 'UNMAPPED' | string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface GatewayExecutionLog {
+  id: string;
+  projectId: string;
+  projectName?: string;
+  apiId?: string;
+  apiName?: string;
+  correlationId: string;
+  scenarioName: string;
+  direction: 'SOURCE_TO_TARGET' | 'TARGET_TO_SOURCE' | string;
+  httpMethod: string;
+  endpointPath: string;
+  sourceUrl: string;
+  gatewayUrl: string;
+  targetUrl: string;
+  mappingVersion?: number;
+  status: 'SUCCESS' | 'WARNING_UNMAPPED_FIELDS' | 'ERROR_MAPPING_MISSING' | 'ERROR_TRANSFORMATION_FAILED' | 'ERROR_VALIDATION_FAILED' | 'ERROR_UNMAPPED_FIELDS' | 'FALLBACK_NO_MAPPING_PASS_THROUGH' | string;
+  httpStatusCode: number;
+  durationMs: number;
+  requestPayload: Record<string, any>;
+  transformedPayload: Record<string, any>;
+  downstreamResponse: Record<string, any>;
+  appliedRules: string[];
+  unmappedFields: string[];
+  errorMessage?: string;
+  resolutionHint?: string;
+  createdAt: string;
 }
 
 export interface ApiCreateRequest {
@@ -166,6 +201,7 @@ export interface ApiCreateRequest {
   httpMethod: string;
   endpointPath: string;
   direction: 'SOURCE_TO_TARGET' | 'TARGET_TO_SOURCE';
+  sourceUrl?: string;
   targetUrl?: string;
   sourceSchema?: string;
   targetSchema?: string;
@@ -177,6 +213,7 @@ export interface ApiUpdateRequest {
   httpMethod?: string;
   endpointPath?: string;
   direction?: 'SOURCE_TO_TARGET' | 'TARGET_TO_SOURCE';
+  sourceUrl?: string;
   targetUrl?: string;
   sourceSchema?: string;
   targetSchema?: string;

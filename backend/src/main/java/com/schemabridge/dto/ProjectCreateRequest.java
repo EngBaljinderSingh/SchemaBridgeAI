@@ -15,7 +15,11 @@ public class ProjectCreateRequest {
     private String name;
     private String description;
     private String sourceSystemName;
+    private String sourceSystemUrl;
     private String targetSystemName;
+    private String targetSystemUrl;
+    private String unmappedFieldPolicy;
+    private String missingMappingPolicy;
     private String approverEmail;
     @Builder.Default
     private boolean autoApproveEnabled = true;

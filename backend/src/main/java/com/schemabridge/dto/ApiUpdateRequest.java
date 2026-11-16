@@ -16,6 +16,7 @@ public class ApiUpdateRequest {
     private String httpMethod;
     private String endpointPath;
     private Direction direction;
+    private String sourceUrl;
     private String targetUrl;
     private String sourceSchema;
     private String targetSchema;

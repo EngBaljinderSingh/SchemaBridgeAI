@@ -24,17 +24,27 @@ public class DemoController {
     private final TransformationEngine transformationEngine;
     private final ProjectService projectService;
     private final MappingService mappingService;
+    private final com.schemabridge.service.DemoProjectsSeeder demoProjectsSeeder;
     private final ObjectMapper objectMapper;
 
     public DemoController(
             TransformationEngine transformationEngine,
             ProjectService projectService,
             MappingService mappingService,
+            com.schemabridge.service.DemoProjectsSeeder demoProjectsSeeder,
             ObjectMapper objectMapper) {
         this.transformationEngine = transformationEngine;
         this.projectService = projectService;
         this.mappingService = mappingService;
+        this.demoProjectsSeeder = demoProjectsSeeder;
         this.objectMapper = objectMapper;
+    }
+
+    @PostMapping("/seed-all")
+    @Operation(summary = "Seed or reset the 2 complete enterprise sample projects (SEtoCM3 and LegacyPOS-to-CloudERP) with all 6 cases")
+    public ResponseEntity<Map<String, Object>> seedAllSampleProjects(
+            @RequestParam(defaultValue = "false") boolean forceReset) {
+        return ResponseEntity.ok(demoProjectsSeeder.ensureSampleProjectsSeeded(forceReset));
     }
 
     /**

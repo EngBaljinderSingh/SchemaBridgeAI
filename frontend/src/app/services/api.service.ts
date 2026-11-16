@@ -20,8 +20,7 @@ import {
   providedIn: 'root'
 })
 export class ApiService {
-  // Uses relative /api path or local dev 8080 fallback
-  private readonly baseUrl = 'http://localhost:8080/api';
+  private readonly baseUrl = '/api';
 
   constructor(private http: HttpClient) {}
 
@@ -34,11 +33,22 @@ export class ApiService {
     return this.http.get<Project>(`${this.baseUrl}/projects/${id}`);
   }
 
-  createProject(data: { name: string; description?: string; sourceSystemName?: string; targetSystemName?: string; approverEmail?: string; autoApproveEnabled?: boolean }): Observable<Project> {
+  createProject(data: {
+    name: string;
+    description?: string;
+    sourceSystemName?: string;
+    sourceSystemUrl?: string;
+    targetSystemName?: string;
+    targetSystemUrl?: string;
+    unmappedFieldPolicy?: string;
+    missingMappingPolicy?: string;
+    approverEmail?: string;
+    autoApproveEnabled?: boolean;
+  }): Observable<Project> {
     return this.http.post<Project>(`${this.baseUrl}/projects`, data);
   }
 
-  updateProject(id: string, data: { name: string; description?: string }): Observable<Project> {
+  updateProject(id: string, data: any): Observable<Project> {
     return this.http.put<Project>(`${this.baseUrl}/projects/${id}`, data);
   }
 
@@ -120,23 +130,23 @@ export class ApiService {
     return this.http.put<MappingDefinition>(`${this.baseUrl}/projects/${projectId}/mappings/${mappingId}/rules`, rules);
   }
 
-  approveMapping(projectId: string, mappingId: string, approvedBy: string = 'admin'): Observable<MappingDefinition> {
+  approveMapping(projectId: string, mappingId: string, approvedBy: string = 'baljinders@opentext.com'): Observable<MappingDefinition> {
     return this.http.post<MappingDefinition>(`${this.baseUrl}/projects/${projectId}/mappings/${mappingId}/approve?approvedBy=${approvedBy}`, {});
   }
 
-  approveAllMappings(projectId: string, mappingId: string, approvedBy: string = 'admin'): Observable<MappingDefinition> {
+  approveAllMappings(projectId: string, mappingId: string, approvedBy: string = 'baljinders@opentext.com'): Observable<MappingDefinition> {
     return this.http.post<MappingDefinition>(`${this.baseUrl}/projects/${projectId}/mappings/${mappingId}/approve-all?approvedBy=${approvedBy}`, {});
   }
 
-  approveAllHighConfidence(projectId: string, mappingId: string, approvedBy: string = 'admin'): Observable<MappingDefinition> {
+  approveAllHighConfidence(projectId: string, mappingId: string, approvedBy: string = 'baljinders@opentext.com'): Observable<MappingDefinition> {
     return this.http.post<MappingDefinition>(`${this.baseUrl}/projects/${projectId}/mappings/${mappingId}/approve-all-high-confidence?approvedBy=${approvedBy}`, {});
   }
 
-  invertMapping(projectId: string, mappingId: string, createdBy: string = 'admin'): Observable<MappingDefinition> {
+  invertMapping(projectId: string, mappingId: string, createdBy: string = 'baljinders@opentext.com'): Observable<MappingDefinition> {
     return this.http.post<MappingDefinition>(`${this.baseUrl}/projects/${projectId}/mappings/${mappingId}/invert?createdBy=${createdBy}`, {});
   }
 
-  publishMapping(projectId: string, mappingId: string, publishedBy: string = 'admin'): Observable<MappingDefinition> {
+  publishMapping(projectId: string, mappingId: string, publishedBy: string = 'baljinders@opentext.com'): Observable<MappingDefinition> {
     return this.http.post<MappingDefinition>(`${this.baseUrl}/projects/${projectId}/mappings/${mappingId}/publish?publishedBy=${publishedBy}`, {});
   }
 
@@ -207,5 +217,26 @@ export class ApiService {
 
   executeApiTransform(projectId: string, apiId: string, payload: any): Observable<any> {
     return this.http.post<any>(`${this.baseUrl}/projects/${projectId}/apis/${apiId}/transform`, payload);
+  }
+
+  // 3-URL Live Gateway & Execution/Error Telemetry Endpoints
+  getGatewayLogs(projectId: string): Observable<any[]> {
+    return this.http.get<any[]>(`${this.baseUrl}/projects/${projectId}/gateway/logs`);
+  }
+
+  clearGatewayLogs(projectId: string): Observable<void> {
+    return this.http.delete<void>(`${this.baseUrl}/projects/${projectId}/gateway/logs`);
+  }
+
+  invokeGateway(projectId: string, req: any): Observable<any> {
+    return this.http.post<any>(`${this.baseUrl}/projects/${projectId}/gateway/invoke`, req);
+  }
+
+  simulateAllGatewayCases(projectId: string): Observable<any[]> {
+    return this.http.post<any[]>(`${this.baseUrl}/projects/${projectId}/gateway/simulate-all`, {});
+  }
+
+  seedAllDemoProjects(forceReset: boolean = false): Observable<any> {
+    return this.http.post<any>(`${this.baseUrl}/demo/seed-all?forceReset=${forceReset}`, {});
   }
 }

@@ -20,6 +20,8 @@ public class RegisteredApiDto {
     private String httpMethod;
     private String endpointPath;
     private Direction direction;
+    private String sourceUrl;
+    private String gatewayUrl;
     private String targetUrl;
     private String sourceSchema;
     private String targetSchema;
